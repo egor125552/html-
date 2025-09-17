@@ -1,26 +1,148 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- DOM Element References ---
     const textInput = document.getElementById('text-input');
     const speakButton = document.getElementById('speak-button');
-    const networkTestButton = document.getElementById('network-test-button');
     const audioPlayback = document.getElementById('audio-playback');
-    const networkSpeedSpan = document.getElementById('network-speed');
-    const estimatedTimeSpan = document.getElementById('estimated-time');
     const loadingSpinner = document.getElementById('loading-spinner');
 
-    // ВНИМАНИЕ: API-ключ хранится в клиентском коде.
-    // Это небезопасно для публичных веб-приложений.
-    // Для этого локального приложения, которое запускается только на вашем компьютере, это приемлемо.
+    // Voice Selection Elements
+    const combobox = document.getElementById('voice-combobox');
+    const selectedVoiceDisplay = document.getElementById('selected-voice');
+    const selectedVoiceNameSpan = document.getElementById('selected-voice-name');
+    const voiceList = document.getElementById('voice-list');
+
+    // Info Section Elements
+    const networkTestButton = document.getElementById('network-test-button');
+    const networkSpeedSpan = document.getElementById('network-speed');
+    const estimatedTimeSpan = document.getElementById('estimated-time');
+
+    // --- State and Constants ---
     const API_KEY = 'AIzaSyAe97uFKZFmSaRpr6Kg72M7m789XqRMzaA';
     const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:generateContent?key=${API_KEY}`;
 
-    speakButton.addEventListener('click', handleSpeak);
-    networkTestButton.addEventListener('click', testNetworkSpeed);
-    textInput.addEventListener('input', updateEstimation);
+    let currentVoice = 'Zephyr';
+    let focusedVoiceIndex = 0;
+    let isListOpen = false;
 
-    function showLoading(show) {
-        loadingSpinner.style.display = show ? 'block' : 'none';
-        speakButton.disabled = show;
-        speakButton.textContent = show ? 'Генерация...' : 'Озвучить';
+    const voices = [
+        { name: 'Zephyr', ru: 'Зефир', desc: 'Яркий и светлый, для энергичных сообщений.' },
+        { name: 'Puck', ru: 'Пак', desc: 'Оптимистичный и веселый, для позитивных новостей.' },
+        { name: 'Charon', ru: 'Харон', desc: 'Информативный и ясный, для новостей и инструкций.' },
+        { name: 'Kore', ru: 'Кора', desc: 'Твердый и уверенный, для официальных заявлений.' },
+        { name: 'Fenrir', ru: 'Фенрир', desc: 'Возбужденный и динамичный, для рекламы и анонсов.' },
+        { name: 'Leda', ru: 'Леда', desc: 'Молодежный и свежий, для блогов и соцсетей.' },
+        { name: 'Orus', ru: 'Орус', desc: 'Строгий и авторитетный, для лекций и документации.' },
+        { name: 'Aoede', ru: 'Аэда', desc: 'Беззаботный и легкий, для развлекательного контента.' },
+        { name: 'Callirrhoe', ru: 'Каллироя', desc: 'Непринужденный и спокойный, для медитаций и поэзии.' },
+        { name: 'Autonoe', ru: 'Автоноя', desc: 'Яркий и живой, для рассказывания историй.' },
+        { name: 'Enceladus', ru: 'Энцелад', desc: 'С придыханием, тихий, для интимных и личных сообщений.' },
+        { name: 'Iapetus', ru: 'Япет', desc: 'Чистый и отчетливый, для образовательных материалов.' },
+        { name: 'Umbriel', ru: 'Умбриэль', desc: 'Простой и дружелюбный, для повседневного общения.' },
+        { name: 'Algieba', ru: 'Альгиеба', desc: 'Гладкий и плавный, для аудиокниг.' },
+        { name: 'Despina', ru: 'Деспина', desc: 'Мягкий и убедительный, для презентаций.' },
+        { name: 'Erinome', ru: 'Эринома', desc: 'Ясный и точный, для технических инструкций.' },
+        { name: 'Algenib', ru: 'Альгениб', desc: 'С хрипотцой, зрелый, для персонажей в историях.' },
+        { name: 'Rasalgethi', ru: 'Рас-Альгети', desc: 'Информативный и зрелый, для новостных сводок.' },
+        { name: 'Laomedeia', ru: 'Лаомедея', desc: 'Оптимистичный и энергичный, для мотивационных речей.' },
+        { name: 'Achernar', ru: 'Ахернар', desc: 'Мягкий и нежный, для колыбельных или успокаивающего контента.' },
+        { name: 'Alnilam', ru: 'Альнилам', desc: 'Твердый и решительный, для важных объявлений.' },
+        { name: 'Schedar', ru: 'Шедар', desc: 'Ровный и последовательный, для длинных текстов.' },
+        { name: 'Gacrux', ru: 'Гакрукс', desc: 'Зрелый и глубокий, для повествования.' },
+        { name: 'Pulcherrima', ru: 'Пульхеррима', desc: 'Прямой и напористый, для деловых сообщений.' },
+        { name: 'Achird', ru: 'Ахирд', desc: 'Дружелюбный и теплый, для приветствий и поддержки.' },
+        { name: 'Zubenelgenubi', ru: 'Зубен эль Генуби', desc: 'Повседневный и расслабленный, для подкастов.' },
+        { name: 'Vindemiatrix', ru: 'Виндемиатрикс', desc: 'Мягкий и деликатный, для чувствительных тем.' },
+        { name: 'Sadachbia', ru: 'Садахбия', desc: 'Живой и анимированный, для детских историй.' },
+        { name: 'Sadaltager', ru: 'Садальтагер', desc: 'Осведомленный и авторитетный, для экспертных мнений.' },
+        { name: 'Sulafat', ru: 'Сулафат', desc: 'Теплый и гостеприимный, для озвучки персонажей.' }
+    ];
+
+    // --- Functions ---
+
+    function populateVoiceList() {
+        voiceList.innerHTML = '';
+        voices.forEach((voice, index) => {
+            const li = document.createElement('li');
+            li.id = `voice-option-${index}`;
+            li.setAttribute('role', 'option');
+            li.setAttribute('data-voice-name', voice.name);
+            li.tabIndex = -1; // Make it focusable via JS
+
+            li.innerHTML = `
+                <div class="voice-info">
+                    <span class="voice-name">${voice.ru} (${voice.name})</span>
+                    <span class="voice-description">${voice.desc}</span>
+                </div>
+                <button class="button-secondary sample-button" data-voice-name="${voice.name}" aria-label="Прослушать пример голоса ${voice.ru}">▶</button>
+            `;
+            voiceList.appendChild(li);
+        });
+    }
+
+    function toggleDropdown(show) {
+        isListOpen = show;
+        voiceList.classList.toggle('open', show);
+        selectedVoiceDisplay.setAttribute('aria-expanded', show);
+        if (show) {
+            focusedVoiceIndex = voices.findIndex(v => v.name === currentVoice);
+            voiceList.children[focusedVoiceIndex]?.focus();
+        }
+    }
+
+    function selectVoice(voiceName) {
+        currentVoice = voiceName;
+        const voice = voices.find(v => v.name === voiceName);
+        selectedVoiceNameSpan.textContent = `${voice.ru} (${voice.name})`;
+        toggleDropdown(false);
+        selectedVoiceDisplay.focus();
+    }
+
+    function handleComboboxKeyDown(e) {
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!isListOpen) {
+                toggleDropdown(true);
+            }
+        }
+    }
+
+    function handleListKeyDown(e) {
+        e.preventDefault();
+        const items = voiceList.children;
+        let nextIndex = focusedVoiceIndex;
+
+        if (e.key === 'ArrowDown') {
+            nextIndex = (focusedVoiceIndex + 1) % items.length;
+        } else if (e.key === 'ArrowUp') {
+            nextIndex = (focusedVoiceIndex - 1 + items.length) % items.length;
+        } else if (e.key === 'Home') {
+            nextIndex = 0;
+        } else if (e.key === 'End') {
+            nextIndex = items.length - 1;
+        } else if (e.key === 'Enter') {
+            selectVoice(items[focusedVoiceIndex].dataset.voiceName);
+            return;
+        } else if (e.key === ' ') {
+            const voiceName = items[focusedVoiceIndex].dataset.voiceName;
+            playSample(voiceName);
+            return;
+        } else if (e.key === 'Escape') {
+            toggleDropdown(false);
+            selectedVoiceDisplay.focus();
+            return;
+        }
+
+        items[focusedVoiceIndex].classList.remove('focused');
+        focusedVoiceIndex = nextIndex;
+        items[focusedVoiceIndex].classList.add('focused');
+        items[focusedVoiceIndex].focus();
+    }
+
+    async function playSample(voiceName) {
+        const sampleText = `This is a sample of the ${voiceName} voice.`;
+        // Use a more descriptive prompt for better results
+        const prompt = `(Speaking in a clear and neutral tone) ${sampleText}`;
+        await generateAndPlayAudio(prompt, voiceName, true);
     }
 
     async function handleSpeak() {
@@ -29,31 +151,24 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Пожалуйста, введите текст для озвучки.');
             return;
         }
+        await generateAndPlayAudio(text, currentVoice, false);
+    }
 
-        showLoading(true);
+    async function generateAndPlayAudio(text, voiceName, isSample) {
+        showLoading(true, isSample);
         audioPlayback.style.display = 'none';
 
         try {
             const response = await fetch(API_URL, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     model: "gemini-2.5-pro-preview-tts",
-                    contents: [{
-                        parts: [{ text: text }]
-                    }],
+                    contents: [{ parts: [{ text: text }] }],
                     generationConfig: {
                         responseModalities: ["AUDIO"],
                         speechConfig: {
-                            voiceConfig: {
-                                // Для Gemini TTS API можно использовать разные голоса, 'Kore' - один из стандартных.
-                                // Также можно управлять речью с помощью промптов, например: "Say cheerfully: Hello world"
-                                prebuiltVoiceConfig: {
-                                    voiceName: "Kore"
-                                }
-                            }
+                            voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } }
                         }
                     }
                 })
@@ -61,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(`Ошибка API: ${errorData.error.message}`);
+                throw new Error(`Ошибка API: ${errorData.error.message || 'Неизвестная ошибка'}`);
             }
 
             const data = await response.json();
@@ -77,24 +192,32 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('Ошибка при генерации речи:', error);
             alert(`Произошла ошибка: ${error.message}`);
         } finally {
-            showLoading(false);
+            showLoading(false, isSample);
         }
     }
 
+    function showLoading(show, isSample) {
+        loadingSpinner.style.display = show ? 'block' : 'none';
+        if (isSample) {
+            // Optionally disable sample buttons while one is playing
+        } else {
+            speakButton.disabled = show;
+            speakButton.textContent = show ? 'Генерация...' : 'Озвучить основной текст';
+        }
+    }
+
+    // --- Other Functions (Network, Estimation, WAV creation) ---
+    // (These are mostly unchanged but included for completeness)
     async function testNetworkSpeed() {
         networkSpeedSpan.textContent = 'тестирование...';
-        const testFileUrl = 'https://upload.wikimedia.org/wikipedia/commons/2/2d/Snake_River_%285mb%29.jpg'; // Примерно 5MB файл
-
-        const startTime = performance.now();
+        const testFileUrl = 'https://upload.wikimedia.org/wikipedia/commons/2/2d/Snake_River_%285mb%29.jpg';
         try {
-            const response = await fetch(testFileUrl, { cache: 'no-store', mode: 'cors' });
+            const startTime = performance.now();
+            const response = await fetch(testFileUrl, { cache: 'no-store' });
             const blob = await response.blob();
             const endTime = performance.now();
-
             const durationInSeconds = (endTime - startTime) / 1000;
-            const speedBps = (blob.size * 8) / durationInSeconds;
-            const speedMbps = (speedBps / 1000 / 1000).toFixed(2);
-
+            const speedMbps = ((blob.size * 8) / durationInSeconds / 1000 / 1000).toFixed(2);
             networkSpeedSpan.textContent = `${speedMbps} Мбит/с`;
         } catch (error) {
             networkSpeedSpan.textContent = 'ошибка теста';
@@ -104,7 +227,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateEstimation() {
         const textLength = textInput.value.length;
-        // Примерный расчет: 15 символов в секунду + 2с на обработку
         const estimatedSeconds = Math.round((textLength / 15) + 2);
         estimatedTimeSpan.textContent = `${estimatedSeconds} секунд`;
     }
@@ -120,40 +242,62 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createWavDataUri(pcmData) {
-        const sampleRate = 24000; // Частота дискретизации для Gemini TTS
+        const sampleRate = 24000;
         const numChannels = 1;
-        const bytesPerSample = 2; // 16-bit PCM
-
+        const bytesPerSample = 2;
         const headerLength = 44;
         const dataLength = pcmData.length;
         const buffer = new ArrayBuffer(headerLength + dataLength);
         const view = new DataView(buffer);
-
-        // RIFF header
         view.setUint32(0, 0x52494646, false); // "RIFF"
         view.setUint32(4, 36 + dataLength, true);
         view.setUint32(8, 0x57415645, false); // "WAVE"
-
-        // "fmt " sub-chunk
         view.setUint32(12, 0x666d7420, false); // "fmt "
         view.setUint32(16, 16, true);
         view.setUint16(20, 1, true); // PCM
         view.setUint16(22, numChannels, true);
         view.setUint32(24, sampleRate, true);
-        view.setUint32(28, sampleRate * numChannels * bytesPerSample, true); // Byte rate
-        view.setUint16(32, numChannels * bytesPerSample, true); // Block align
-        view.setUint16(34, bytesPerSample * 8, true); // Bits per sample
-
-        // "data" sub-chunk
+        view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
+        view.setUint16(32, numChannels * bytesPerSample, true);
+        view.setUint16(34, bytesPerSample * 8, true);
         view.setUint32(36, 0x64617461, false); // "data"
         view.setUint32(40, dataLength, true);
-
-        // PCM data
         new Uint8Array(buffer, headerLength).set(pcmData);
-
         const blob = new Blob([view], { type: 'audio/wav' });
         return URL.createObjectURL(blob);
     }
 
+    // --- Event Listeners ---
+    speakButton.addEventListener('click', handleSpeak);
+    networkTestButton.addEventListener('click', testNetworkSpeed);
+    textInput.addEventListener('input', updateEstimation);
+
+    selectedVoiceDisplay.addEventListener('click', () => toggleDropdown(!isListOpen));
+    selectedVoiceDisplay.addEventListener('keydown', handleComboboxKeyDown);
+    voiceList.addEventListener('keydown', handleListKeyDown);
+
+    voiceList.addEventListener('click', (e) => {
+        const target = e.target;
+        const voiceItem = target.closest('li');
+        if (!voiceItem) return;
+
+        const voiceName = voiceItem.dataset.voiceName;
+
+        if (target.classList.contains('sample-button')) {
+            playSample(voiceName);
+        } else {
+            selectVoice(voiceName);
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!combobox.contains(e.target)) {
+            toggleDropdown(false);
+        }
+    });
+
+    // --- Initialization ---
+    populateVoiceList();
     updateEstimation();
+    selectVoice(currentVoice); // Set initial voice display
 });

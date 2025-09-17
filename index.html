@@ -8,29 +8,54 @@
 </head>
 <body>
     <div class="container">
-        <h1>Gemini Озвучка текста</h1>
-        <p>Введите текст ниже, чтобы преобразовать его в речь с помощью Gemini.</p>
+        <header>
+            <h1>Gemini Озвучка текста</h1>
+            <p>Продвинутый инструмент для преобразования текста в речь с настройками голоса, созданный для всех.</p>
+        </header>
 
-        <textarea id="text-input" rows="10" placeholder="Введите ваш текст здесь..."></textarea>
-        <button id="speak-button">Озвучить</button>
+        <main>
+            <section class="generation-section" aria-labelledby="generation-heading">
+                <h2 id="generation-heading">1. Введите текст</h2>
+                <p>Вы можете управлять стилем речи прямо в тексте. Например, попробуйте написать: <br>
+                    <code>(Say in a happy tone) Привет, мир!</code> или <code>(Говорить шепотом) Это секрет.</code>
+                </p>
+                <textarea id="text-input" rows="8" placeholder="Введите ваш текст здесь..."></textarea>
+                <button id="speak-button" class="button-primary">Озвучить основной текст</button>
+                <div id="loading-spinner" class="spinner" style="display: none;" role="status" aria-live="polite">
+                    <p>Идет генерация...</p>
+                </div>
+                <audio id="audio-playback" controls aria-label="Проигрыватель сгенерированного аудио"></audio>
+            </section>
 
-        <audio id="audio-playback" controls></audio>
+            <section class="voice-selection-section" aria-labelledby="voice-heading">
+                <h2 id="voice-heading">2. Выберите голос</h2>
+                <p>Используйте стрелки для навигации, <kbd>Space</kbd> для прослушивания примера и <kbd>Enter</kbd> для выбора голоса.</p>
+                <div id="voice-combobox" class="voice-combobox">
+                    <div class="selected-voice" id="selected-voice" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="voice-heading">
+                        <span id="selected-voice-name">Zephyr</span>
+                        <span class="arrow-down">▼</span>
+                    </div>
+                    <ul id="voice-list" class="voice-list" role="listbox" tabindex="-1" aria-labelledby="voice-heading">
+                        <!-- Голоса будут добавлены сюда с помощью JavaScript -->
+                    </ul>
+                </div>
+            </section>
 
-        <div class="info-section">
-            <h2>Информация о системе</h2>
-            <div id="network-test">
-                <button id="network-test-button">Тестировать скорость сети</button>
-                <p>Скорость вашего соединения: <span id="network-speed">неизвестно</span></p>
-            </div>
-            <div id="time-estimation">
-                <p>Примерное время генерации: <span id="estimated-time">0 секунд</span></p>
-            </div>
-            <div id="speed-info">
-                <h3>Рекомендуемая скорость интернета</h3>
-                <p>Для комфортной работы приложения рекомендуется скорость соединения от 1 Мбит/с. При более низкой скорости возможны задержки при генерации речи.</p>
-            </div>
-        </div>
-        <div id="loading-spinner" class="spinner" style="display: none;"></div>
+            <section class="info-section" aria-labelledby="info-heading">
+                <h2 id="info-heading">Дополнительная информация</h2>
+                <div id="network-test">
+                    <button id="network-test-button">Тестировать скорость сети</button>
+                    <p>Скорость вашего соединения: <span id="network-speed">неизвестно</span></p>
+                </div>
+                <div id="time-estimation">
+                    <p>Примерное время генерации: <span id="estimated-time">0 секунд</span></p>
+                </div>
+                <div id="speed-info">
+                    <h3>Рекомендуемая скорость интернета</h3>
+                    <p>Для комфортной работы приложения рекомендуется скорость соединения от 1 Мбит/с. При более низкой скорости возможны задержки.</p>
+                </div>
+            </section>
+        </main>
     </div>
     <script src="script.js"></script>
 </body>
