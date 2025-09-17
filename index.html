@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Text-to-Speech</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Gemini Озвучка текста</h1>
+        <p>Введите текст ниже, чтобы преобразовать его в речь с помощью Gemini.</p>
+
+        <textarea id="text-input" rows="10" placeholder="Введите ваш текст здесь..."></textarea>
+        <button id="speak-button">Озвучить</button>
+
+        <audio id="audio-playback" controls></audio>
+
+        <div class="info-section">
+            <h2>Информация о системе</h2>
+            <div id="network-test">
+                <button id="network-test-button">Тестировать скорость сети</button>
+                <p>Скорость вашего соединения: <span id="network-speed">неизвестно</span></p>
+            </div>
+            <div id="time-estimation">
+                <p>Примерное время генерации: <span id="estimated-time">0 секунд</span></p>
+            </div>
+            <div id="speed-info">
+                <h3>Рекомендуемая скорость интернета</h3>
+                <p>Для комфортной работы приложения рекомендуется скорость соединения от 1 Мбит/с. При более низкой скорости возможны задержки при генерации речи.</p>
+            </div>
+        </div>
+        <div id="loading-spinner" class="spinner" style="display: none;"></div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
