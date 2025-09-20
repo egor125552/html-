@@ -79,6 +79,11 @@ class TestTelethonClient(unittest.IsolatedAsyncioTestCase):
 
         self.mock_tg_client.iter_messages = mock_iter_messages
 
+        # Also need to mock get_messages for the total count
+        mock_total = MagicMock()
+        mock_total.total = len(mock_messages)
+        self.mock_tg_client.get_messages = AsyncMock(return_value=mock_total)
+
         # Act
         with tempfile.NamedTemporaryFile(mode='w+', delete=False, encoding='utf-8') as tmp:
             filepath = tmp.name
@@ -136,6 +141,11 @@ class TestTelethonClient(unittest.IsolatedAsyncioTestCase):
 
         self.mock_tg_client.iter_messages = mock_iter_messages
         self.mock_tg_client.forward_messages = AsyncMock()
+
+        # Mock the get_messages call for the total count
+        mock_total = MagicMock()
+        mock_total.total = len(mock_messages)
+        self.mock_tg_client.get_messages = AsyncMock(return_value=mock_total)
 
         # Act
         await self.telethon_client_instance._forward_all_messages(source_chat_id, dest_chat_id)

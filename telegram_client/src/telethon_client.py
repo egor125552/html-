@@ -134,17 +134,20 @@ class TelethonClient(QObject):
     # ... (остальные методы _count_messages, _export_to_txt и т.д. остаются здесь)
     async def _count_messages(self, chat_id):
         try:
-            self.status_update.emit(f"Подсчет сообщений в чате {chat_id}...")
+            self.status_update.emit(f"Отправка запроса на подсчет сообщений в чате {chat_id}...")
             messages = await self.client.get_messages(chat_id, limit=0)
             count = messages.total
-            self.status_update.emit(f"Найдено сообщений: {count}")
+            self.status_update.emit(f"Подсчет завершен. Найдено сообщений: {count}")
             self.message_count_ready.emit(count)
         except Exception as e:
             self.status_update.emit(f"Ошибка Telethon [подсчет]: {e}")
 
     async def _export_to_txt(self, chat_id, filepath):
         try:
-            self.status_update.emit(f"Начинаю экспорт чата {chat_id} в {filepath}...")
+            self.status_update.emit(f"Получение общего количества сообщений для экспорта...")
+            total_messages = (await self.client.get_messages(chat_id, limit=0)).total
+            self.status_update.emit(f"Начинаю экспорт {total_messages} сообщений в {filepath}...")
+
             count = 0
             with open(filepath, 'w', encoding='utf-8') as f:
                 async for message in self.client.iter_messages(chat_id):
@@ -155,7 +158,8 @@ class TelethonClient(QObject):
                     f.write(f"[{message.date.strftime('%Y-%m-%d %H:%M:%S')}] {sender}: {text}\n")
                     count += 1
                     if count % 100 == 0:
-                        self.status_update.emit(f"Экспортировано {count} сообщений...")
+                        self.status_update.emit(f"Экспортировано {count} / {total_messages} сообщений...")
+
             self.status_update.emit(f"Экспорт завершен. Всего экспортировано {count} сообщений в файл {filepath}.")
             self.export_finished.emit(filepath)
         except Exception as e:
@@ -176,18 +180,22 @@ class TelethonClient(QObject):
 
     async def _forward_all_messages(self, source_chat_id, dest_chat_id):
         try:
-            self.status_update.emit(f"Начинаю пересылку из {source_chat_id} в {dest_chat_id}...")
+            self.status_update.emit(f"Получение общего количества сообщений для пересылки...")
+            total_messages = (await self.client.get_messages(source_chat_id, limit=0)).total
+            self.status_update.emit(f"Начинаю пересылку {total_messages} сообщений из {source_chat_id} в {dest_chat_id}...")
+
             count = 0
             async for message in self.client.iter_messages(source_chat_id, reverse=True):
                 try:
                     await self.client.forward_messages(dest_chat_id, message.id, source_chat_id)
                     count += 1
                     if count % 50 == 0:
-                        self.status_update.emit(f"Переслано {count} сообщений... делаю паузу во избежание флуда.")
+                        self.status_update.emit(f"Переслано {count} / {total_messages} сообщений... делаю паузу во избежание флуда.")
                         await asyncio.sleep(5)
                 except Exception as e:
                     self.status_update.emit(f"Не удалось переслать сообщение {message.id}: {e}")
                     await asyncio.sleep(1)
+
             self.status_update.emit(f"Пересылка завершена. Всего переслано {count} сообщений.")
             self.forwarding_finished.emit(count)
         except Exception as e:
