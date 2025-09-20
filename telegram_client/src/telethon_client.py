@@ -3,6 +3,7 @@ import os
 import zipfile
 from PyQt6.QtCore import QObject, pyqtSignal
 from telethon import TelegramClient
+from telethon.tl.types import MessageService
 
 # --- Конфигурация ---
 API_ID = 23883645
@@ -183,23 +184,38 @@ class TelethonClient(QObject):
 
     async def _forward_all_messages(self, source_chat_id, dest_chat_id):
         try:
-            self.status_update.emit(f"Получение общего количества сообщений для пересылки...")
+            self.status_update.emit("Получение общего количества сообщений для пересылки...")
             total_messages = (await self.client.get_messages(source_chat_id, limit=0)).total
-            self.status_update.emit(f"Начинаю пересылку {total_messages} сообщений из {source_chat_id} в {dest_chat_id}...")
+            self.status_update.emit(f"Начинаю пересылку ~{total_messages} сообщений из {source_chat_id} в {dest_chat_id}...")
 
-            count = 0
+            success_count = 0
+            failed_count = 0
+            skipped_count = 0
+
             async for message in self.client.iter_messages(source_chat_id, reverse=True):
+                # Пропускаем служебные сообщения
+                if isinstance(message, MessageService):
+                    skipped_count += 1
+                    continue
+
                 try:
                     await self.client.forward_messages(dest_chat_id, message.id, source_chat_id)
-                    count += 1
-                    if count % 50 == 0:
-                        self.status_update.emit(f"Переслано {count} / {total_messages} сообщений... делаю паузу во избежание флуда.")
+                    success_count += 1
+                    # Обновляем статус каждые 50 успешных пересылок
+                    if success_count % 50 == 0:
+                        processed_count = success_count + failed_count + skipped_count
+                        self.status_update.emit(f"Обработано: {processed_count}/{total_messages}. Переслано: {success_count}. Пропущено: {skipped_count}. Ошибок: {failed_count}. Пауза...")
                         await asyncio.sleep(5)
-                except Exception as e:
-                    self.status_update.emit(f"Не удалось переслать сообщение {message.id}: {e}")
-                    await asyncio.sleep(1)
+                except Exception:
+                    failed_count += 1
 
-            self.status_update.emit(f"Пересылка завершена. Всего переслано {count} сообщений.")
-            self.forwarding_finished.emit(count)
+            final_message = (
+                f"Пересылка завершена.\n"
+                f"  - Успешно переслано: {success_count}\n"
+                f"  - Не удалось переслать (ошибки): {failed_count}\n"
+                f"  - Пропущено (служ. сообщения): {skipped_count}"
+            )
+            self.status_update.emit(final_message)
+            self.forwarding_finished.emit(success_count)
         except Exception as e:
             self.status_update.emit(f"Критическая ошибка Telethon [пересылка]: {e}")

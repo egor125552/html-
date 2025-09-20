@@ -58,8 +58,11 @@ class MainWindow(QMainWindow):
         self.export_txt_button.clicked.connect(self.on_export_txt_clicked)
         self.export_zip_button = QPushButton("Экспорт исходного в .zip")
         self.export_zip_button.clicked.connect(self.on_export_zip_clicked)
-        self.forward_all_button = QPushButton("Переслать ВСЕ из исходного в целевой")
+        self.forward_all_button = QPushButton("Переслать ВСE из исходного в целевой")
         self.forward_all_button.clicked.connect(self.on_forward_all_clicked)
+
+        self.save_log_button = QPushButton("Сохранить лог в файл")
+        self.save_log_button.clicked.connect(self.on_save_log_clicked)
 
         controls_layout.addWidget(source_chat_label)
         controls_layout.addWidget(self.source_chat_display)
@@ -69,6 +72,7 @@ class MainWindow(QMainWindow):
         controls_layout.addWidget(self.export_txt_button)
         controls_layout.addWidget(self.export_zip_button)
         controls_layout.addWidget(self.forward_all_button)
+        controls_layout.addWidget(self.save_log_button)
 
         # Секция логов
         log_label = QLabel("Логи и статус:")
@@ -216,6 +220,24 @@ class MainWindow(QMainWindow):
             # Ждем его полного завершения
             self.telethon_thread.wait()
         event.accept()
+
+    @pyqtSlot()
+    def on_save_log_clicked(self):
+        """Сохраняет содержимое лога в текстовый файл."""
+        log_content = self.log_widget.toPlainText()
+        if not log_content:
+            QMessageBox.warning(self, "Лог пуст", "Нет данных для сохранения.")
+            return
+
+        filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить лог", "telegram_client_log.txt", "Text Files (*.txt)")
+
+        if filepath:
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(log_content)
+                QMessageBox.information(self, "Успех", f"Лог успешно сохранен в файл:\n{filepath}")
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка сохранения", f"Не удалось сохранить файл.\nОшибка: {e}")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
