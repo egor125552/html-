@@ -13,11 +13,13 @@ API_HASH = 'd14551e03adb7251eabff4dab1d9004d'
 SESSION_NAME = 'anon'
 
 class TelethonClient(QObject):
+    # --- Сигналы для связи с GUI ---
     dialogs_ready = pyqtSignal(list)
     status_update = pyqtSignal(str)
     message_count_ready = pyqtSignal(int)
     export_finished = pyqtSignal(str)
     forwarding_finished = pyqtSignal(int)
+    # Сигналы для процесса входа
     phone_required = pyqtSignal()
     code_required = pyqtSignal()
     password_required = pyqtSignal()
@@ -26,6 +28,7 @@ class TelethonClient(QObject):
         super().__init__()
         self.client = TelegramClient(SESSION_NAME, API_ID, API_HASH, system_version="4.16.30-vxCUSTOM")
         self.loop = asyncio.new_event_loop()
+        # События и переменные для синхронизации с GUI потоком
         self._phone_event = asyncio.Event()
         self._code_event = asyncio.Event()
         self._password_event = asyncio.Event()
@@ -33,6 +36,7 @@ class TelethonClient(QObject):
         self._code = ""
         self._password = ""
 
+    # --- Публичные методы, вызываемые из GUI ---
     def send_phone(self, phone):
         self._phone = phone
         self.loop.call_soon_threadsafe(self._phone_event.set)
@@ -46,9 +50,12 @@ class TelethonClient(QObject):
         self.loop.call_soon_threadsafe(self._password_event.set)
 
     def start_connecting(self):
+        """Запускает процесс подключения и держит цикл событий активным."""
+        self.status_update.emit("Запуск фонового процесса...")
         asyncio.set_event_loop(self.loop)
         self.loop.create_task(self._connect_with_login())
         self.loop.run_forever()
+        self.status_update.emit("Фоновый процесс остановлен.")
 
     def start_message_count(self, chat_id):
         asyncio.run_coroutine_threadsafe(self._count_messages(chat_id), self.loop)
@@ -64,6 +71,7 @@ class TelethonClient(QObject):
     def start_forwarding_all(self, source_chat_id, dest_chat_id):
         asyncio.run_coroutine_threadsafe(self._forward_all_messages(source_chat_id, dest_chat_id), self.loop)
 
+    # --- Приватные асинхронные методы ---
     async def _get_phone(self):
         self._phone_event.clear()
         self.phone_required.emit()
@@ -83,6 +91,7 @@ class TelethonClient(QObject):
         return self._password
 
     async def _connect_with_login(self):
+        """Основной метод подключения с обработкой логина."""
         try:
             await self.client.connect()
             if not await self.client.is_user_authorized():
@@ -92,9 +101,10 @@ class TelethonClient(QObject):
                 if not await self.client.is_user_authorized():
                      await self.client.sign_in(password=await self._get_password())
             except Exception:
-                 pass
+                 pass # Ошибка возникает, если пароль не нужен, просто продолжаем.
             if await self.client.is_user_authorized():
                 self.status_update.emit("Авторизация прошла успешно!")
+                print("Авторизация прошла успешно!") # Дублируем в консоль
                 await self._connect_and_fetch_dialogs()
             else:
                 self.status_update.emit("Не удалось авторизоваться.")
@@ -102,6 +112,7 @@ class TelethonClient(QObject):
             self.status_update.emit(f"Ошибка при подключении: {e}")
 
     async def _connect_and_fetch_dialogs(self):
+        """Получает и отправляет в GUI список диалогов."""
         try:
             dialogs = await self.client.get_dialogs(limit=None)
             chat_list = [{'id': dialog.id, 'name': dialog.name} for dialog in dialogs]
@@ -111,13 +122,18 @@ class TelethonClient(QObject):
             self.status_update.emit(f"Ошибка Telethon [получение чатов]: {e}")
 
     async def _count_messages(self, chat_id):
+        """Считает сообщения в чате."""
         try:
+            self.status_update.emit(f"Отправка запроса на подсчет сообщений в чате {chat_id}...")
             messages = await self.client.get_messages(chat_id, limit=0)
-            self.message_count_ready.emit(messages.total)
+            count = messages.total
+            self.status_update.emit(f"Подсчет завершен. Найдено сообщений: {count}")
+            self.message_count_ready.emit(count)
         except Exception as e:
             self.status_update.emit(f"Ошибка Telethon [подсчет]: {e}")
 
     async def _export_to_txt(self, chat_id, filepath, is_sub_task=False):
+        """Экспортирует текстовые сообщения в файл."""
         try:
             if not is_sub_task:
                 total = (await self.client.get_messages(chat_id, limit=0)).total
@@ -134,6 +150,7 @@ class TelethonClient(QObject):
             self.status_update.emit(f"Ошибка Telethon [экспорт в txt]: {e}")
 
     async def _export_to_zip(self, chat_id, options):
+        """Экспортирует чат в ZIP архив согласно выбранным опциям."""
         zip_filepath = options.get("filepath")
         with tempfile.TemporaryDirectory() as temp_dir:
             try:
@@ -164,47 +181,42 @@ class TelethonClient(QObject):
                     for media_type, should_download in download_map.items():
                         if should_download and media_map.get(media_type):
                             os.makedirs(os.path.join(temp_dir, media_type), exist_ok=True)
+                            filename = f"{message.id}_{media_map.get(media_type).attributes[-1].file_name if hasattr(media_map.get(media_type).attributes[-1], 'file_name') else ''}"
                             await self.client.download_media(
                                 message.media,
-                                file=os.path.join(temp_dir, media_type, f"{message.id}_{media_map.get(media_type).attributes[-1].file_name if hasattr(media_map.get(media_type).attributes[-1], 'file_name') else ''}")
+                                file=os.path.join(temp_dir, media_type, filename)
                             )
 
-                self.status_update.emit("Архивация файлов...")
-                shutil.make_archive(zip_filepath.replace('.zip', ''), 'zip', temp_dir)
+                self.status_update.emit("Архивация файлов... Это может занять некоторое время.")
+                await asyncio.to_thread(shutil.make_archive, zip_filepath.replace('.zip', ''), 'zip', temp_dir)
                 self.export_finished.emit(zip_filepath)
             except Exception as e:
                 self.status_update.emit(f"Ошибка Telethon [экспорт в ZIP]: {e}")
 
     async def _forward_all_messages(self, source_chat_id, dest_chat_id):
+        """Пересылает сообщения с умным пропуском и логированием."""
         try:
-            self.status_update.emit("Получение общего количества сообщений для пересылки...")
             total_messages = (await self.client.get_messages(source_chat_id, limit=0)).total
-            self.status_update.emit(f"Начинаю пересылку ~{total_messages} сообщений из {source_chat_id} в {dest_chat_id}...")
-
-            success_count = 0
-            failed_count = 0
-            skipped_count = 0
-
+            self.status_update.emit(f"Начинаю пересылку ~{total_messages} сообщений...")
+            success_count, failed_count, skipped_count = 0, 0, 0
             async for message in self.client.iter_messages(source_chat_id, reverse=True):
                 if isinstance(message, MessageService):
                     skipped_count += 1
                     continue
-
                 try:
                     await self.client.forward_messages(dest_chat_id, message.id, source_chat_id)
                     success_count += 1
                     if success_count % 50 == 0:
-                        processed_count = success_count + failed_count + skipped_count
-                        self.status_update.emit(f"Обработано: {processed_count}/{total_messages}. Переслано: {success_count}. Пропущено: {skipped_count}. Ошибок: {failed_count}. Пауза...")
+                        processed = success_count + failed_count + skipped_count
+                        self.status_update.emit(f"Обработано: {processed}/{total_messages}. Переслано: {success_count}...")
                         await asyncio.sleep(5)
                 except Exception:
                     failed_count += 1
-
             final_message = (
                 f"Пересылка завершена.\n"
-                f"  - Успешно переслано: {success_count}\n"
-                f"  - Не удалось переслать (ошибки): {failed_count}\n"
-                f"  - Пропущено (служ. сообщения): {skipped_count}"
+                f"  - Успешно: {success_count}\n"
+                f"  - Ошибки: {failed_count}\n"
+                f"  - Пропущено: {skipped_count}"
             )
             self.status_update.emit(final_message)
             self.forwarding_finished.emit(success_count)

@@ -10,15 +10,19 @@ from telethon_client import TelethonClient
 from export_dialog import ExportDialog
 
 class MainWindow(QMainWindow):
+    """
+    Главное окно приложения.
+    """
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Telegram Client")
-        self.setGeometry(100, 100, 1000, 700) # Increased window size
+        self.setGeometry(100, 100, 1000, 700) # Увеличенный размер окна
         self.all_chats = []
         self.init_ui()
         self.init_telethon_thread()
 
     def init_ui(self):
+        """Инициализирует и собирает пользовательский интерфейс."""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
@@ -61,7 +65,6 @@ class MainWindow(QMainWindow):
         self.export_zip_button.clicked.connect(self.on_export_zip_clicked)
         self.forward_all_button = QPushButton("Переслать ВСE из исходного в целевой")
         self.forward_all_button.clicked.connect(self.on_forward_all_clicked)
-
         self.save_log_button = QPushButton("Сохранить лог в файл")
         self.save_log_button.clicked.connect(self.on_save_log_clicked)
 
@@ -93,10 +96,12 @@ class MainWindow(QMainWindow):
         self.log("Приложение запущено.")
 
     def init_telethon_thread(self):
-        # ... (Эта функция остается без изменений)
+        """Инициализирует и запускает фоновый поток для Telethon."""
         self.telethon_thread = QThread()
         self.telethon_client = TelethonClient()
         self.telethon_client.moveToThread(self.telethon_thread)
+
+        # Соединяем все сигналы и слоты
         self.telethon_client.dialogs_ready.connect(self.update_chat_lists)
         self.telethon_client.status_update.connect(self.log)
         self.telethon_client.message_count_ready.connect(self.on_message_count_ready)
@@ -105,11 +110,12 @@ class MainWindow(QMainWindow):
         self.telethon_client.phone_required.connect(self.prompt_for_phone)
         self.telethon_client.code_required.connect(self.prompt_for_code)
         self.telethon_client.password_required.connect(self.prompt_for_password)
+
         self.telethon_thread.finished.connect(self.telethon_thread.deleteLater)
         self.telethon_thread.started.connect(self.telethon_client.start_connecting)
         self.telethon_thread.start()
 
-    # --- Слоты для входа (остаются без изменений) ---
+    # --- Слоты для процесса входа ---
     @pyqtSlot()
     def prompt_for_phone(self):
         text, ok = QInputDialog.getText(self, 'Требуется номер телефона', 'Пожалуйста, введите ваш номер телефона:')
@@ -126,21 +132,24 @@ class MainWindow(QMainWindow):
     # --- Основные слоты ---
     @pyqtSlot(str)
     def log(self, message):
+        """Выводит сообщение в лог и в статус-бар."""
         self.log_widget.append(message)
         self.statusBar().showMessage(message)
+        print(message) # Дублируем в консоль для доступности
 
     @pyqtSlot(list)
     def update_chat_lists(self, chats):
-        self.log(f"Получено {len(chats)} чатов. Обновление списков...")
+        """Обновляет оба списка чатов."""
         self.all_chats = chats
         self.source_chat_list.clear()
         self.dest_chat_list.clear()
         for chat in chats:
             self.source_chat_list.addItem(chat['name'])
             self.dest_chat_list.addItem(chat['name'])
-        self.log("Списки чатов обновлены.")
+        self.log(f"Списки чатов ({len(chats)} шт.) обновлены.")
 
     def _get_chat_id_from_display(self, display_widget):
+        """Вспомогательная функция для извлечения ID из текстового поля."""
         text = display_widget.text()
         if not text: return None
         match = re.search(r'\(ID: (-?\d+)\)', text)
@@ -148,6 +157,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(QListWidgetItem, QListWidgetItem)
     def on_source_chat_changed(self, current, previous):
+        """Обновляет поле исходного чата при изменении выбора."""
         if not current: return
         chat_data = next((chat for chat in self.all_chats if chat['name'] == current.text()), None)
         if chat_data:
@@ -155,6 +165,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(QListWidgetItem, QListWidgetItem)
     def on_dest_chat_changed(self, current, previous):
+        """Обновляет поле целевого чата при изменении выбора."""
         if not current: return
         chat_data = next((chat for chat in self.all_chats if chat['name'] == current.text()), None)
         if chat_data:
@@ -171,9 +182,7 @@ class MainWindow(QMainWindow):
     @pyqtSlot()
     def on_export_txt_clicked(self):
         chat_id = self._get_chat_id_from_display(self.source_chat_display)
-        if chat_id is None:
-            QMessageBox.warning(self, "Ошибка", "Пожалуйста, сначала выберите исходный чат.")
-            return
+        if chat_id is None: return
         default_filename = f"chat_{chat_id}_export.txt"
         filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить экспорт чата", default_filename, "Text Files (*.txt)")
         if filepath:
@@ -182,22 +191,13 @@ class MainWindow(QMainWindow):
     @pyqtSlot()
     def on_export_zip_clicked(self):
         chat_id = self._get_chat_id_from_display(self.source_chat_display)
-        if chat_id is None:
-            QMessageBox.warning(self, "Ошибка", "Пожалуйста, сначала выберите исходный чат.")
-            return
-
+        if chat_id is None: return
         default_filename = f"chat_{chat_id}_export.zip"
         dialog = ExportDialog(self, default_filename)
-
         if dialog.exec():
             options = dialog.get_options()
-            filepath = options.get("filepath")
-            if not filepath:
-                QMessageBox.warning(self, "Ошибка", "Не указан путь для сохранения файла.")
-                return
-
-            self.log(f"Запускаем экспорт чата ID {chat_id} в ZIP-архив с опциями...")
-            self.telethon_client.start_export_to_zip(chat_id, options)
+            if options.get("filepath"):
+                self.telethon_client.start_export_to_zip(chat_id, options)
 
     @pyqtSlot()
     def on_forward_all_clicked(self):
@@ -208,6 +208,21 @@ class MainWindow(QMainWindow):
             return
         self.telethon_client.start_forwarding_all(source_chat_id, dest_chat_id)
 
+    @pyqtSlot()
+    def on_save_log_clicked(self):
+        """Сохраняет содержимое лога в текстовый файл."""
+        log_content = self.log_widget.toPlainText()
+        if not log_content: return
+        filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить лог", "telegram_client_log.txt", "Text Files (*.txt)")
+        if filepath:
+            try:
+                with open(filepath, 'w', encoding='utf-8') as f:
+                    f.write(log_content)
+                QMessageBox.information(self, "Успех", f"Лог успешно сохранен в файл:\n{filepath}")
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка сохранения", f"Не удалось сохранить файл.\nОшибка: {e}")
+
+    # --- Слоты для отображения результатов ---
     @pyqtSlot(int)
     def on_message_count_ready(self, count):
         QMessageBox.information(self, "Результат подсчета", f"Всего сообщений в исходном чате: {count}")
@@ -221,33 +236,13 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Пересылка завершена", f"Всего было переслано {count} сообщений.")
 
     def closeEvent(self, event):
+        """Корректно завершает работу фонового потока при закрытии окна."""
         self.log("Завершение работы...")
         if self.telethon_thread.isRunning():
-            # Посылаем сигнал в цикл событий, чтобы он остановился
             self.telethon_client.loop.call_soon_threadsafe(self.telethon_client.loop.stop)
-            # Завершаем поток
             self.telethon_thread.quit()
-            # Ждем его полного завершения
             self.telethon_thread.wait()
         event.accept()
-
-    @pyqtSlot()
-    def on_save_log_clicked(self):
-        """Сохраняет содержимое лога в текстовый файл."""
-        log_content = self.log_widget.toPlainText()
-        if not log_content:
-            QMessageBox.warning(self, "Лог пуст", "Нет данных для сохранения.")
-            return
-
-        filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить лог", "telegram_client_log.txt", "Text Files (*.txt)")
-
-        if filepath:
-            try:
-                with open(filepath, 'w', encoding='utf-8') as f:
-                    f.write(log_content)
-                QMessageBox.information(self, "Успех", f"Лог успешно сохранен в файл:\n{filepath}")
-            except Exception as e:
-                QMessageBox.critical(self, "Ошибка сохранения", f"Не удалось сохранить файл.\nОшибка: {e}")
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
