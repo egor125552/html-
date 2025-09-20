@@ -7,6 +7,7 @@ from PyQt6.QtWidgets import (
     QMessageBox, QFileDialog, QInputDialog
 )
 from telethon_client import TelethonClient
+from export_dialog import ExportDialog
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -184,10 +185,19 @@ class MainWindow(QMainWindow):
         if chat_id is None:
             QMessageBox.warning(self, "Ошибка", "Пожалуйста, сначала выберите исходный чат.")
             return
+
         default_filename = f"chat_{chat_id}_export.zip"
-        filepath, _ = QFileDialog.getSaveFileName(self, "Сохранить ZIP-архив", default_filename, "ZIP Archives (*.zip)")
-        if filepath:
-            self.telethon_client.start_export_to_zip(chat_id, filepath)
+        dialog = ExportDialog(self, default_filename)
+
+        if dialog.exec():
+            options = dialog.get_options()
+            filepath = options.get("filepath")
+            if not filepath:
+                QMessageBox.warning(self, "Ошибка", "Не указан путь для сохранения файла.")
+                return
+
+            self.log(f"Запускаем экспорт чата ID {chat_id} в ZIP-архив с опциями...")
+            self.telethon_client.start_export_to_zip(chat_id, options)
 
     @pyqtSlot()
     def on_forward_all_clicked(self):
