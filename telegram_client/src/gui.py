@@ -209,7 +209,11 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self.log("Завершение работы...")
         if self.telethon_thread.isRunning():
+            # Посылаем сигнал в цикл событий, чтобы он остановился
+            self.telethon_client.loop.call_soon_threadsafe(self.telethon_client.loop.stop)
+            # Завершаем поток
             self.telethon_thread.quit()
+            # Ждем его полного завершения
             self.telethon_thread.wait()
         event.accept()
 

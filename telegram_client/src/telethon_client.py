@@ -55,9 +55,12 @@ class TelethonClient(QObject):
         self.loop.call_soon_threadsafe(self._password_event.set)
 
     def start_connecting(self):
-        """Запускает процесс подключения и входа."""
-        self.status_update.emit("Запуск клиента...")
-        self.loop.run_until_complete(self._connect_with_login())
+        """Запускает процесс подключения и держит цикл событий активным."""
+        self.status_update.emit("Запуск фонового процесса...")
+        asyncio.set_event_loop(self.loop)
+        self.loop.create_task(self._connect_with_login())
+        self.loop.run_forever()
+        self.status_update.emit("Фоновый процесс остановлен.")
 
     def start_message_count(self, chat_id):
         asyncio.run_coroutine_threadsafe(self._count_messages(chat_id), self.loop)
