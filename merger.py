@@ -1,48 +1,33 @@
 import pandas as pd
 import numpy as np
 import re
-from sentence_transformers import SentenceTransformer, util
 import os
 import time
+import logging
+from manual_matching_dictionary import manual_matching_dictionary # ИМПОРТИРУЕМ СЛОВАРЬ
 
-# ================== СЛОВАРИ (Версия 22.2 - ENCYCLOPEDIA MAXIMUM) ==================
-JUNK_PHRASES = ['склад магазина', 'остатки', 'начальный остаток']
+# ================== НАСТРОЙКИ ЛОГИРОВАНИЯ ==================
+logging.basicConfig(level=logging.INFO,
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[
+                        logging.FileHandler("merger.log", mode='w', encoding='utf-8'),
+                        logging.StreamHandler()
+                    ])
 
-CATEGORY_KEYWORDS = {
-    'корм': 'питание корм', 'консервы': 'питание консервы', 'паштет': 'питание паштет', 'кусочки': 'питание кусочки', 'пауч': 'питание пауч', 'желе': 'питание желе', 'суп': 'питание суп', 'мусс': 'питание мусс', 'лакомство': 'питание лакомство', 'дропсы': 'питание лакомство', 'подушечки': 'питание лакомство', 'снеки': 'питание лакомство', 'палочки': 'питание лакомство', 'диета': 'питание диета', 'рацион': 'питание корм', 'формула': 'питание корм', 'меню': 'питание корм', 'хлопья': 'питание хлопья', 'гранулы': 'питание гранулы', 'wafers': 'питание вафли', 'sticks': 'питание палочки', 'pellets': 'питание гранулы', 'crisps': 'питание чипсы', 'flakes': 'питание хлопья', 'tablets': 'питание таблетки', 'микс': 'питание микс', 'крем-лакомство': 'питание лакомство', 'рубец': 'питание лакомство', 'трахея': 'питание лакомство', 'легкое': 'питание лакомство', 'печень': 'питание лакомство', 'уши': 'питание лакомство', 'хвост': 'питание лакомство', 'семенники': 'питание лакомство', 'бычий корень': 'питание лакомство', 'нога': 'питание лакомство', 'шампунь': 'гигиена шампунь', 'бальзам': 'гигиена бальзам', 'кондиционер': 'гигиена кондиционер', 'зубная паста': 'гигиена зубы', 'зубной гель': 'гигиена зубы', 'зубная щетка': 'гигиена зубы', 'капли': 'гигиена капли', 'лосьон': 'гигиена лосьон', 'спрей': 'гигиена спрей', 'пена': 'гигиена пена', 'воск для лап': 'гигиена лапы', 'салфетки': 'гигиена салфетки', 'подгузники': 'гигиена подгузники', 'пеленки': 'гигиена пеленки', 'бинт': 'гигиена бинт', 'паста для вывода шерсти': 'гигиена шерсть', 'пудра': 'гигиена пудра', 'туалет': 'аксессуар туалет', 'лоток': 'аксессуар туалет', 'совок': 'аксессуар туалет', 'наполнитель': 'аксессуар наполнитель', 'силикагелевый': 'аксессуар наполнитель', 'древесный': 'аксессуар наполнитель', 'бентонитовый': 'аксессуар наполнитель', 'кукурузный': 'аксессуар наполнитель', 'тофу': 'аксессуар наполнитель', 'лежанка': 'аксессуар лежанка', 'лежак': 'аксессуар лежанка', 'домик': 'аксессуар домик', 'матрас': 'аксессуар матрас', 'когтеточка': 'аксессуар когтеточка', 'столбик': 'аксессуар когтеточка', 'миска': 'аксессуар миска', 'кормушка': 'аксессуар кормушка', 'поилка': 'аксессуар поилка', 'бутылка': 'аксессуар поилка', 'ошейник': 'аксессуар ошейник', 'поводок': 'аксессуар поводок', 'шлея': 'аксессуар шлея', 'рулетка': 'аксессуар рулетка', 'намордник': 'аксессуар намордник', 'переноска': 'аксессуар переноска', 'сумка': 'аксессуар переноска', 'рюкзак': 'аксессуар переноска', 'клетка': 'аксессуар клетка', 'вольер': 'аксессуар вольер', 'пакеты': 'аксессуар пакеты', 'диспенсер': 'аксессуар пакеты', 'адресник': 'аксессуар адресник', 'игрушка': 'игрушка', 'дразнилка': 'игрушка', 'мышь': 'игрушка мышь', 'мяч': 'игрушка мяч', 'удочка': 'игрушка удочка', 'интерактивная': 'игрушка интерактивная', 'канат': 'игрушка канат', 'гантель': 'игрушка гантель', 'кольцо': 'игрушка кольцо', 'трек': 'игрушка трек', 'головоломка': 'игрушка головоломка', 'комбинезон': 'одежда комбинезон', 'попона': 'одежда попона', 'свитер': 'одежда свитер', 'ботинки': 'одежда ботинки', 'носки': 'одежда носки', 'дождевик': 'одежда дождевик', 'куртка': 'одежда куртка', 'жилет': 'одежда жилет', 'щетка': 'инструмент щетка', 'расческа': 'инструмент расческа', 'пуходерка': 'инструмент пуходерка', 'фурминатор': 'инструмент фурминатор', 'когтерез': 'инструмент когтерез', 'триммер': 'инструмент триммер', 'колтунорез': 'инструмент колтунорез', 'ножницы': 'инструмент ножницы', 'витамины': 'добавки витамины', 'добавка': 'добавки', 'масло': 'добавки масло', 'кальций': 'добавки кальций', 'глюкозамин': 'добавки суставы', 'msm': 'добавки суставы', 'пробиотик': 'добавки пищеварение', 'средство': 'ветпрепарат', 'гель': 'ветпрепарат', 'защита': 'ветпрепарат', 'нейтрализатор': 'ветпрепарат', 'удалитель': 'ветпрепарат', 'мазь': 'ветпрепарат мазь', 'суспензия': 'ветпрепарат суспензия', 'таблетки': 'ветпрепарат таблетки', 'раствор': 'ветпрепарат раствор', 'ошейник от блох': 'ветпрепарат ошейник',
-}
+# ================== СЛОВАРИ И КОНСТАНТЫ ==================
 
-TRANSLATIONS = {
-    '8in1': '8 в 1', '8 in 1': '8 в 1', 'акана': 'acana', 'хиллс': 'hills', 'роял канин': 'royal canin', 'деревенские лакомства': '', 'мнямс': 'mnyams', 'бубу': 'bubu', 'петс': 'pets', 'клини': 'cliny', 'клан': 'clan', 'флекси': 'flexi', 'гамма': 'gamma', 'грин кьюзин': 'green qzin', 'сириус': 'sirius', 'бруксфилд': 'brooksfield', 'чикопи': 'chicopee', 'джосера': 'josera', 'вискас': 'whiskas', 'дарлинг': 'darling', 'пробаланс': 'probalance', 'про хвост': 'prohvost', 'терра кот': 'terra kot', 'наш рацион': 'nash ratsion', 'грандорф': 'grandorf', 'монж': 'monge', 'бош': 'bosch', 'эукануба': 'eukanuba', 'адванс': 'advance', 'фитмин': 'fitmin', 'пурина про план': 'purina pro plan', 'пурина': 'purina', 'блиц': 'blitz', 'бон аппетит': 'bon appetit', 'брит': 'brit', 'альфапет': 'alphapet', 'амброзия': 'ambrosia', 'дронтал': 'drontal', 'кавалер кинг чарльз': 'cavalier king charles', 'cat step': 'кэт степ', 'bunny': 'банни', 'collar': 'коллар', 'harper': 'харпер', 'imac': 'аймак', 'isegrim': 'айсегрим', 'little one': 'литл ван', 'lolo pets': 'лоло петс', 'mf expert': 'мистер фреш', 'molina': 'молина', 'н&д': 'farmina', 'np': 'natures protection', 'rolf club': 'рольф клуб', 'sensible': 'сенситив', 'schesir': 'шезир', 'triol': 'триол', 'алезан': 'alezan', 'амит': 'amit', 'барс': 'bars', 'вет лайф': 'vet life', 'дирофен': 'dirofen', 'зорька': 'zorka', 'ирис': 'iris', 'кладакса': 'kladax', 'мелоксивет': 'meloxivet', 'празицид': 'prazicid', 'сибау': 'cibau', 'санабелль': 'sanabelle', 'вит': 'vitamin', 'кэа': 'care', 'нп': 'natures protection', 'прайм': 'prime', 'киппи': 'kippy', 'нэк': 'necon', 'сера': 'sera', 'н-д': 'farmina', 'н д': 'farmina', 'апи-сан': 'apicenna', 'апиценна': 'apicenna', 'cat': 'кошка', 'cats': 'кошек', 'кош': 'кошек', 'dog': 'собака', 'dogs': 'собак', 'соб': 'собак', 'puppy': 'щенок', 'kitten': 'котенок', 'кот': 'кошек', 'canine': 'собак', 'feline': 'кошек', 'toy': 'игрушка', 'gf': 'беззерновой', 'grain free': 'беззерновой', 'dental': 'дентал', 'adult': 'взрослых', 'junior': 'юниор', 'senior': 'пожилых', 'ageing': 'пожилых', 'эйджинг': 'пожилых', 'maxi': 'крупных', 'medium': 'средних', 'mini': 'мелких', 'indoor': 'домашних', 'sterilised': 'стерилизованных', 'urinary': 'уринари', 'sensitive': 'сенситив', 'hairball': 'хэйрбол', 'gastrointestinal': 'гастроинтестинал', 'hypoallergenic': 'гипоаллергенный', 'lamb': 'ягненок', 'beef': 'говядина', 'healthy digestion': 'здоровое пищеварение', 'healthy growth': 'здоровый рост', 'healthy skin': 'здоровая кожа', 'shiny coat': 'блестящая шерсть', 'монопротеиновый': 'монопротеиновый', 'excel': 'эксель', 'coprophagia': 'копрофагия', 'glucosamine': 'глюкозамин', 'brewers yeast': 'пивные дрожжи', 'multi vit-puppy': 'мультивитамины для щенков', 'complete': 'полнорационный', 'mediterranean': 'средиземноморский', 'in gravy': 'в соусе', 'loaf': 'паштет', 'roots': 'рутс', 'bwild': 'бивайлд', 'monoprotein': 'монопротеин', 'natural superpremium': '', 'digestive care': 'забота о пищеварении', 'самоф': 'самофиксирующийся', 'охлажд/разогрев': 'охлаждающий разогревающий', 'беззерн': 'беззерновой', 'гипоаллергенный': 'гипоаллергенный', 'мочевыводящей': 'мочеполовой', 'мочеполовой сис-мой': 'мочеполовой системы', 'послеоперац': 'послеоперационная', 'black&white': 'черный белый', 'breeze': 'бриз', 'fresh mint': 'свежая мята', 'lavender': 'лаванда', 'pink': 'розовый', 'дайджестив кэа': 'digestive care', 'лос': 'лосось', 'инд': 'индейка', 'ягн': 'ягненок', 'из опилок': 'опилки', 'фреш': 'fresh', 'дизайн': 'design', 'неон': 'neon', 'комфорт': 'comfort', 'экстрим': 'xtreme', 'выносливость': 'выносливость', 'стать': 'стать', 'характер': 'характер', 'песчанок': 'песчанок', 'салоил': 'salmoil', 'ричетта': 'ricetta', 'смарт': 'smart', 'композит': 'composite', 'паппи': 'puppy', 'stool odour reduction': 'уменьшение запаха стула', 'urinary care': 'забота о мочевыделительной системе', 'weight control': 'контроль веса', 'british shorthair': 'британская короткошерстная', 'брит короткошерстная': 'британская короткошерстная', 'canaries prestige': 'престиж для канареек', 'cardiac': 'кардиак', 'cavia': 'кавиа', 'chinchilla & degu': 'шиншилла и дегу', 'crispy sticks': 'криспи стикс', 'cuni adult': 'куни эдалт', 'cuni junior': 'куни юниор', 'cuni sensitive': 'куни сенситив', 'diabetic': 'диабетик', 'fibre response': 'файбер респонс', 'flexi': 'флекси', 'gastro intestinal': 'гастроинтестинал', 'hamster & gerbil': 'хомяк и песчанка', 'hepatic': 'гепатик', 'low fat': 'низкожировой', 'moderate calorie': 'умеренная калорийность', 'mother & babycat': 'мама и котенок', 'new line': 'нью лайн', 'parfum': 'парфюм', 'starter': 'стартер', 'для мытья': 'для мытья', 'против поедания фекалий': 'против копрофагии', 'комплексная добавка': 'витамины', 'воздушный паштет': 'паштет', 'для выведен.шерсти': 'для вывода шерсти', 'д/уменьш.зап.стула': 'для уменьшения запаха стула', 'д/домаш.кошек': 'для домашних кошек', 'д/стерил.кошек': 'для стерилизованных кошек', 'д/взрос.собак': 'для взрослых собак', 'д/щенк.сред.пород': 'для щенков средних пород', 'д/взрос.собак мин.пород': 'для взрослых собак миниатюрных пород', 'д/стерил.собак мин.пород': 'для стерилизованных собак миниатюрных пород', 'с чувств.пищевар': 'с чувствительным пищеварением', 'молодых собак': 'юниор', 'впитывающий древесный': 'древесный наполнитель', 'впитывающ. силикагелев.': 'силикагелевый впитывающий наполнитель', 'комкующ. минеральн.': 'комкующийся минеральный наполнитель', 'комкующ. растительн.': 'комкующийся растительный наполнитель', 'интерактивная кормушка': 'игрушка кормушка', 'от колтунов': 'против колтунов', 'без смывания': 'сухой', 'репеллентный': 'репеллентный', 'антипаразитарный': 'антипаразитарный',
-}
+# Используем импортированный словарь
+MANUAL_MATCH_DICT = manual_matching_dictionary
 
-ABBREVIATIONS = {
-    'д/кош': 'для кошек', 'д/кошек': 'для кошек', 'д/кота': 'для кошек', 'д/кот': 'для кошек', 'д/к': 'для кошек', 'д/котят': 'для котят',
-    'д/соб': 'для собак', 'д/с': 'для собак', 'д/животн': 'для животных', 'д/щенков': 'для щенков', 'в асс': 'в ассортименте',
-    'уп': 'упаковка', 'конс': 'консервы', 'полнорац': 'полнорационный', 'д/взрос': 'для взрослых', 'д/взр': 'для взрослых',
-    'привередл': 'привередливых', 'прифилакт': 'профилактика', 'мкб': 'мочекаменной болезни', 'жкт': 'желудочно-кишечного тракта',
-    'д/выведен': 'для выведения', 'д/уменьш': 'для уменьшения', 'зап': 'запаха', 'бер': 'беременных',
-    'корм': 'кормящих', 'стерил': 'стерилизованных', 'чувств': 'чувствительного', 'пищевар': 'пищеварения',
-    'пищ': 'пищеварения', 'мин': 'миниатюрных', 'средн': 'средних', 'молод': 'молодых', 'взр': 'взрослых',
-    'наполн': 'наполнитель', 'впитывающ': 'впитывающий', 'комкующ': 'комкующийся', 'растительн': 'растительный',
-    'древесн': 'древесный', 'минеральн': 'минеральный', 'доп': 'дополнительный', 'однораз': 'одноразовых',
-    'прямоугольн': 'прямоугольный', 'высок': 'высоким', 'влаж': 'влажный', 'сух': 'сухой', 'голуб': 'голубой',
-    'сер': 'серый', 'роз': 'розовый', 'зел': 'зеленый', 'син': 'синий', 'угл': 'угольный', 'табл': 'таблетки',
-    'жеват': 'жевательные', 'охл': 'охлаждающий', 'разогрев': 'разогревающий', 'пакет': 'пакеты', 'пак': 'пакеты',
-    'ошейник': 'ошейник', 'дайдж': 'пищеварения', 'гастро': 'гастро', 'интест': 'интестинал', 'гепат': 'гепатик',
-    'фл': 'флакон', 'пор': 'пород', 'длинношер': 'длинношерстных', 'короткошерстных': 'короткошерстных',
-    'гипоалл': 'гипоаллергенный', 'протеин': 'протеиновый', 'инсектоакарицидные': 'от блох и клещей',
-    'сусп': 'суспензия', 'таб': 'таблетки', 'бан': 'банка', 'пип': 'пипетка', 'сЧП': 'с чувствительным пищеварением',
-    'ягн': 'ягненок', 'инд': 'индейка', 'лос': 'лосось', 'кур': 'курица', 'гов': 'говядина', 'с/': 'с', 'д/': 'для',
-    'силикагелев': 'силикагелевый', 'д/поддержки': 'для поддержки', 'cобак': 'собак', '2-х': 'двух', 'овсян': 'овсяным',
-    'подс': 'подсолнечным', 'льнян': 'льняным', 'полев': 'полевыми', 'сЧП': 'с чувствительным пищеварением',
-    'д/к-': 'для котят', 'самоф': 'самофиксирующийся', 'ветерин': 'ветеринарный', 'охлажд': 'охлаждающий',
-    'разогрев': 'разогревающий', 'стоматологическ': 'стоматологический', 'нерж': 'нержавеющей', 'с/у': 'с', 'беззернов': 'беззерновой',
-    'д/мытья': 'для мытья', 'д/взросл': 'для взрослых', 'д/домаш': 'для домашних', 'д/выведен.шерсти': 'для вывода шерсти'
-}
-
-UNITS = {'cm': 'см', 'mm': 'мм', 'm': 'м', 'kg': 'кг', 'g': 'г', 'гр': 'г', 'l': 'л', 'ml': 'мл', 'шт': 'шт', 'tb': 'таб', 'таблетки': 'таб', 'пауч': 'пауч'}
-NOISE_WORDS = ['1+1', '1+1=3', 'акция', 'спеццена', 'новинка', 'new', '12+', '2in1', '3in1', '4 in 1', 'xl', 'xs', 's', 'm', 'l', 'xxl', 'vp', 'ru']
+def clean_key(text):
+    """Более надежная очистка ключей для сопоставления."""
+    if not isinstance(text, str): return ""
+    text = text.lower()
+    # Заменяем знаки препинания, которые могут мешать, на пробел
+    text = re.sub(r'[,\."\'`’“”()\[\]]', ' ', text)
+    # Заменяем множественные пробелы на один
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
 # --- Функции для загрузки и обработки данных ---
 
@@ -50,116 +35,70 @@ def load_main_data(filepath):
     """
     Загружает основной файл, обрабатывает двухуровневый заголовок и находит столбец с товарами.
     """
-    print(f"Загрузка основного файла: {filepath}...")
+    logging.info(f"Загрузка основного файла: {filepath}...")
     if not os.path.exists(filepath):
-        print(f"ОШИБКА: Основной файл не найден по пути: {filepath}")
+        logging.error(f"Основной файл не найден по пути: {filepath}")
         return None, None, None
 
     try:
-        # Не используем index_col=0, чтобы pandas сам разобрался.
-        # Это более надежно для реальных данных.
         df = pd.read_excel(filepath, header=[0, 1])
         original_columns = df.columns
-
-        # Создаем копию для работы, чтобы не изменять оригинал напрямую
         work_df = df.copy()
+        # Создаем плоские, рабочие названия колонок
         work_df.columns = ['_'.join(map(str, col)).strip().replace('Unnamed: ', '').replace('_level_0', '') for col in work_df.columns.values]
 
         product_column = None
         for col in work_df.columns:
-            if 'номенклатура' in col.lower():
-                product_column = col
-                break
+            # Ищем столбец, который содержит 'номенклатура', но не является просто заголовком группы
+            if 'номенклатура' in col.lower() and not col.lower().endswith('_номенклатура'):
+                 product_column = col
+                 break
+
+        # Если не нашли по точному совпадению, ищем по частичному
+        if not product_column:
+            for col in work_df.columns:
+                 if 'номенклатура' in col.lower():
+                    product_column = col
+                    break
 
         if product_column:
-            print(f"Столбец с наименованиями определен как: '{product_column}'")
+            logging.info(f"Столбец с наименованиями определен как: '{product_column}'")
         else:
-            print("ОШИБКА: Не удалось найти столбец со словом 'номенклатура' в заголовке.")
+            logging.error("Не удалось найти столбец со словом 'номенклатура' в заголовке.")
             return None, None, None
 
         return work_df, product_column, original_columns
     except Exception as e:
-        print(f"Критическая ошибка при чтении основного файла: {e}")
+        logging.critical(f"Критическая ошибка при чтении основного файла: {e}")
         return None, None, None
 
 def load_catalogs(filepaths):
     """
     Загружает, объединяет и очищает файлы-каталоги.
     """
-    print("Загрузка и объединение файлов-каталогов...")
+    logging.info("Загрузка и объединение файлов-каталогов...")
     all_catalogs = []
     for path in filepaths:
         if os.path.exists(path):
             try:
-                all_catalogs.append(pd.read_excel(path))
-                print(f" - Каталог '{path}' успешно загружен.")
+                # Указываем openpyxl, чтобы избежать предупреждений о стилях
+                all_catalogs.append(pd.read_excel(path, engine='openpyxl'))
+                logging.info(f" - Каталог '{path}' успешно загружен.")
             except Exception as e:
-                print(f" - ПРЕДУПРЕЖДЕНИЕ: Не удалось прочитать каталог '{path}'. Ошибка: {e}")
+                logging.warning(f" - Не удалось прочитать каталог '{path}'. Ошибка: {e}")
         else:
-            print(f" - ПРЕДУПРЕЖДЕНИЕ: Файл каталога не найден: '{path}', пропускаем.")
+            logging.warning(f" - Файл каталога не найден: '{path}', пропускаем.")
 
     if not all_catalogs:
-        print("ОШИБКА: Не найдено ни одного файла-каталога.")
+        logging.error("Не найдено ни одного файла-каталога.")
         return None
 
     master_catalog = pd.concat(all_catalogs, ignore_index=True)
-    print(f"Всего позиций в каталогах до очистки: {len(master_catalog)}")
-
-    # Удаляем строки без Названия или URL Картинки в S3
-    initial_rows = len(master_catalog)
+    logging.info(f"Всего позиций в каталогах до очистки: {len(master_catalog)}")
     master_catalog.dropna(subset=['Название', 'URL Картинки в S3'], inplace=True)
-    cleaned_rows = len(master_catalog)
-    print(f"Удалено {initial_rows - cleaned_rows} строк с пустыми значениями 'Название' или 'URL'.")
-    print(f"Всего позиций в каталогах после очистки: {cleaned_rows}")
+    logging.info(f"Всего позиций в каталогах после очистки: {len(master_catalog)}")
 
     return master_catalog
-
-# --- Функция нормализации текста ---
-
-def normalize_text(text):
-    """
-    Приводит текст к нормализованному виду для семантического сравнения.
-    """
-    if not isinstance(text, str):
-        return ""
-
-    text_lower = text.lower()
-
-    # 1. Проверка на "мусорные" фразы
-    for phrase in JUNK_PHRASES:
-        if phrase in text_lower:
-            return ""
-
-    # 2. Агрессивно расставляем пробелы вокруг спецсимволов
-    processed_text = re.sub(r'([/+\*х\"()&:])', r' \1 ', text_lower)
-
-    # 3. Применяем словари для замены и перевода
-    # Используем word boundary \b для более точных замен, чтобы не заменять части слов
-    for dictionary in [TRANSLATIONS, ABBREVIATIONS, UNITS]:
-        for key, value in dictionary.items():
-            processed_text = re.sub(r'\b' + re.escape(key) + r'\b', value, processed_text)
-
-    # 4. Удаляем "шумные" слова
-    for word in NOISE_WORDS:
-        processed_text = re.sub(r'\b' + re.escape(word) + r'\b', '', processed_text)
-
-    # 5. Добавляем теги категорий в конец строки
-    category_tags = set()
-    for keyword, category in CATEGORY_KEYWORDS.items():
-        if re.search(r'\b' + re.escape(keyword) + r'\b', processed_text):
-            # Добавляем в формате _категория_
-            category_tags.add(f"_{category.replace(' ', '_')}_")
-
-    # Сортируем теги для консистентности векторов
-    if category_tags:
-        processed_text += ' ' + ' '.join(sorted(list(category_tags)))
-
-    # 6. Удаляем все символы, кроме букв, цифр, пробелов и _
-    processed_text = re.sub(r'[^a-zа-я0-9_\s]', '', processed_text)
-
-    # 7. Удаляем лишние пробелы и возвращаем результат
-    return re.sub(r'\s+', ' ', processed_text).strip()
-
 
 def main():
     """
@@ -170,100 +109,99 @@ def main():
 
     df_main, product_column_name, original_columns = load_main_data(main_file)
     if df_main is None:
-        print("\nВыполнение скрипта прервано из-за ошибки при загрузке основного файла.")
+        logging.error("Выполнение скрипта прервано из-за ошибки при загрузке основного файла.")
         return
 
     df_catalog = load_catalogs(catalog_files)
     if df_catalog is None:
-        print("\nВыполнение скрипта прервано из-за ошибки при загрузке каталогов.")
-        # Все равно создаем пустой выходной файл
+        logging.error("Выполнение скрипта прервано из-за ошибки при загрузке каталогов.")
         generate_output_files(df_main, None, set(), product_column_name, original_columns)
         return
 
-    print("\nЭтап загрузки и предобработки данных завершен.")
-
-    print("\nНачинается этап нормализации названий...")
-    df_main['normalized_name'] = df_main[product_column_name].astype(str).apply(normalize_text)
-    df_catalog['normalized_name'] = df_catalog['Название'].astype(str).apply(normalize_text)
-
-    df_main_filtered = df_main[df_main['normalized_name'] != ''].copy()
-    df_catalog_filtered = df_catalog[df_catalog['normalized_name'] != ''].copy()
-    print("Этап нормализации завершен.")
+    logging.info("Этап загрузки и предобработки данных завершен.")
 
     df_main['matched_url'] = pd.NA
-    df_main['match_score'] = 0.0
     used_catalog_indices = set()
 
-    if not df_main_filtered.empty and not df_catalog_filtered.empty:
-        print("\nНачинается этап семантического сопоставления...")
-        MODEL_NAME = 'paraphrase-multilingual-MiniLM-L12-v2'
-        SIMILARITY_THRESHOLD = 0.85
-        try:
-            model = SentenceTransformer(MODEL_NAME)
-            main_names = df_main_filtered['normalized_name'].tolist()
-            catalog_names = df_catalog_filtered['normalized_name'].tolist()
-            main_embeddings = model.encode(main_names, convert_to_tensor=True, show_progress_bar=True)
-            catalog_embeddings = model.encode(catalog_names, convert_to_tensor=True, show_progress_bar=True)
-            cosine_scores = util.cos_sim(main_embeddings, catalog_embeddings)
+    logging.info("Начинается этап ручного сопоставления по словарю...")
+    manual_matches = 0
+    catalog_url_map = df_catalog.set_index('Название')['URL Картинки в S3'].to_dict()
 
-            for i, main_row_index in enumerate(df_main_filtered.index):
-                scores_for_item = cosine_scores[i]
-                best_match_index = scores_for_item.argmax().item()
-                best_score = scores_for_item[best_match_index].item()
+    logging.info("Очистка ключей словаря для ручного сопоставления...")
+    CLEANED_MANUAL_MATCH_DICT = {clean_key(k): v for k, v in MANUAL_MATCH_DICT.items() if k}
+    logging.info(f"Очистка ключей завершена. Размер словаря: {len(CLEANED_MANUAL_MATCH_DICT)}.")
 
-                if best_score >= SIMILARITY_THRESHOLD:
-                    catalog_match_row = df_catalog_filtered.iloc[best_match_index]
-                    df_main.loc[main_row_index, 'matched_url'] = catalog_match_row['URL Картинки в S3']
-                    df_main.loc[main_row_index, 'match_score'] = best_score
-                    used_catalog_indices.add(catalog_match_row.name)
-            print("Этап семантического сопоставления завершен.")
-        except Exception as e:
-            print(f"Критическая ошибка во время семантического анализа: {e}")
-    else:
-        print("\nПропуск семантического сопоставления: нет данных для сравнения.")
+    for index, row in df_main.iterrows():
+        original_name = row[product_column_name]
+        if not isinstance(original_name, str) or not original_name.strip():
+            continue
+        cleaned_name = clean_key(original_name)
 
-    print("\nНачинается этап генерации выходных файлов...")
+        if cleaned_name in CLEANED_MANUAL_MATCH_DICT:
+            catalog_name = CLEANED_MANUAL_MATCH_DICT[cleaned_name]
+            if catalog_name in catalog_url_map:
+                df_main.loc[index, 'matched_url'] = catalog_url_map[catalog_name]
+                manual_matches += 1
+                catalog_match_indices = df_catalog.index[df_catalog['Название'] == catalog_name].tolist()
+                if catalog_match_indices:
+                    used_catalog_indices.add(catalog_match_indices[0])
+
+    logging.info(f"Выполнено {manual_matches} сопоставлений по ручному словарю.")
+
+    total_matched = df_main['matched_url'].notna().sum()
+    total_unmatched = len(df_main) - total_matched
+    logging.info("\n" + "="*15 + " ИТОГОВЫЙ ОТЧЕТ " + "="*15)
+    logging.info(f"Всего обработано строк: {len(df_main)}")
+    logging.info(f"ИТОГО найдено совпадений: {total_matched}")
+    logging.info(f"Осталось без совпадений: {total_unmatched}")
+    logging.info("="*48)
+
+    logging.info("Начинается этап генерации выходных файлов...")
     generate_output_files(df_main, df_catalog, used_catalog_indices, product_column_name, original_columns)
-
 
 def generate_output_files(df_main, df_catalog, used_catalog_indices, product_column_name, original_columns):
     """
-    Создает итоговый Excel-файл и текстовый отчет для отладки, используя xlsxwriter для корректной работы с MultiIndex.
+    Создает итоговый Excel-файл и текстовый отчет для отладки.
     """
-    output_excel_path = 'result_AI_ULTIMATE.xlsx'
-    print(f"Сохранение основного файла с результатами в '{output_excel_path}'...")
+    output_excel_path = 'output_with_url.xlsx'
+    logging.info(f"Сохранение основного файла с результатами в '{output_excel_path}'...")
 
-    # --- 1. Создание result_AI_ULTIMATE.xlsx ---
-    # Создаем новый DataFrame для сохранения, чтобы точно контролировать столбцы и их порядок
-    df_to_save = pd.DataFrame()
-
-    # Восстанавливаем исходные столбцы с их оригинальными MultiIndex заголовками
-    for col_tuple in original_columns:
-        flat_name = '_'.join(map(str, col_tuple)).strip().replace('Unnamed: ', '').replace('_level_0', '')
-        if flat_name in df_main.columns:
-            df_to_save[col_tuple] = df_main[flat_name]
-
-    # Добавляем новый столбец с найденными URL
-    df_to_save[('URL Картинки в S3', 'Найденное AI')] = df_main['matched_url'].values
+    # Создаем копию для сохранения и переименовываем колонку
+    df_to_save = df_main.copy()
+    df_to_save.rename(columns={'matched_url': 'URL'}, inplace=True)
 
     try:
-        # ИСПОЛЬЗУЕМ XLSXWRITER: Он корректно обрабатывает MultiIndex вместе с index=False
-        df_to_save.to_excel(output_excel_path, index=False, engine='xlsxwriter')
-        print(f"Файл '{output_excel_path}' успешно создан.")
-    except Exception as e:
-        print(f"ОШИБКА: Не удалось сохранить Excel-файл. Убедитесь, что библиотека 'xlsxwriter' установлена (`pip install xlsxwriter`). Ошибка: {e}")
+        with pd.ExcelWriter(output_excel_path, engine='xlsxwriter') as writer:
+            df_to_save.to_excel(writer, index=False, sheet_name='Sheet1')
+            workbook  = writer.book
+            worksheet = writer.sheets['Sheet1']
 
-    # --- 2. Создание debug_report.txt ---
+            # Авто-подбор ширины колонок
+            for i, col in enumerate(df_to_save.columns):
+                # Находим максимальную длину значения в колонке
+                max_len = df_to_save[col].astype(str).map(len).max()
+                if pd.isna(max_len):
+                    max_len = 0
+                # Сравниваем с длиной заголовка и берем большее значение
+                column_width = max(int(max_len), len(str(col)))
+                # Устанавливаем ширину с небольшим запасом
+                worksheet.set_column(i, i, column_width + 2)
+
+        logging.info(f"Файл '{output_excel_path}' успешно создан.")
+    except Exception as e:
+        logging.error(f"Не удалось сохранить Excel-файл. Ошибка: {e}")
+
     debug_report_path = 'debug_report.txt'
-    print(f"Создание отладочного отчета '{debug_report_path}'...")
+    logging.info(f"Создание отладочного отчета '{debug_report_path}'...")
     try:
         with open(debug_report_path, 'w', encoding='utf-8') as f:
             f.write("="*30 + "\nСЕКЦИЯ 1: ТОВАРЫ БЕЗ СОВПАДЕНИЙ\n" + "="*30 + "\n")
             unmatched_products = df_main[df_main['matched_url'].isna()]
             if not unmatched_products.empty:
                 for index, row in unmatched_products.iterrows():
-                    # +2 потому что 1 строка - заголовки, и индексация pandas с 0
-                    f.write(f"Строка #{index + 2}: {row[product_column_name]}\n")
+                    # Убедимся, что product_column_name существует в row
+                    if product_column_name in row:
+                        f.write(f"Строка #{index + 2}: {row[product_column_name]}\n")
             else:
                 f.write("Все товары из основного файла были успешно сопоставлены.\n")
 
@@ -280,13 +218,12 @@ def generate_output_files(df_main, df_catalog, used_catalog_indices, product_col
             else:
                 f.write("Каталоги не были загружены или пусты.\n")
 
-        print(f"Отчет '{debug_report_path}' успешно создан.")
+        logging.info(f"Отчет '{debug_report_path}' успешно создан.")
     except Exception as e:
-        print(f"ОШИБКА: Не удалось создать отладочный отчет. {e}")
-
+        logging.error(f"Не удалось создать отладочный отчет. {e}")
 
 if __name__ == "__main__":
     start_time = time.time()
     main()
     end_time = time.time()
-    print(f"\nСкрипт завершил работу за {end_time - start_time:.2f} секунд.")
+    logging.info(f"Скрипт завершил работу за {end_time - start_time:.2f} секунд.")
