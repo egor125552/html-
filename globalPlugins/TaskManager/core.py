@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import wx
-import psutil
+from . import psutil
 import ctypes
 from .startup import StartupManagerDialog
 
