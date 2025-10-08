@@ -83,6 +83,7 @@
     </div>
 
     <script>
+        console.log('скрипт запущен');
         const statusDiv = document.getElementById('status');
         const zipUploadInput = document.getElementById('zip-upload');
         const runButton = document.getElementById('run-button');
@@ -148,17 +149,26 @@
 
         // --- 2. Обработка загрузки ZIP ---
         zipUploadInput.addEventListener('change', async (event) => {
+            console.log('ZIP-файл выбран');
             const file = event.target.files[0];
-            if (!file) return;
+            if (!file) {
+                console.log('Файл не выбран');
+                return;
+            }
 
             statusDiv.textContent = 'Распаковка ZIP-архива...';
+            console.log('Начало распаковки...');
             try {
                 const jszip = new JSZip();
                 const zip = await jszip.loadAsync(file);
+                console.log('ZIP-архив загружен в JSZip');
 
                 const modelJsonBlob = await zip.file('model.json').async('blob');
+                console.log('Извлечен model.json');
                 const weightsBinBlob = await zip.file('weights.bin').async('blob');
+                console.log('Извлечен weights.bin');
                 const metadataJsonBlob = await zip.file('metadata.json').async('blob');
+                console.log('Извлечен metadata.json');
 
                 // Проверяем, что все файлы на месте
                 if (!modelJsonBlob || !weightsBinBlob || !metadataJsonBlob) {
@@ -168,77 +178,104 @@
                 // Создаем временные URL
                 if (modelURL) URL.revokeObjectURL(modelURL);
                 if (metadataURL) URL.revokeObjectURL(metadataURL);
+                console.log('Старые Object URL отозваны (если были)');
 
                 modelURL = URL.createObjectURL(new File([modelJsonBlob, weightsBinBlob], 'model.json'));
                 metadataURL = URL.createObjectURL(metadataJsonBlob);
+                console.log('Созданы новые Object URL для модели:', { modelURL, metadataURL });
 
                 statusDiv.textContent = 'Модель готова к запуску!';
                 runButton.disabled = false;
+                console.log('Кнопка "Запустить" активирована');
 
             } catch (error) {
                 statusDiv.textContent = `Ошибка: ${error.message}`;
-                console.error(error);
+                console.error('Произошла ошибка при обработке ZIP:', error);
             }
         });
 
-        // --- 3. Инициализация аудио и модели ---
+        // --- 3. Инициализация аудио и модели (ПЕРЕРАБОТАННАЯ ЛОГИКА) ---
         runButton.addEventListener('click', async () => {
+            console.log('Кнопка "Запустить" нажата');
             if (!modelURL || !metadataURL) {
+                console.error('URL модели или метаданных не установлены');
                 statusDiv.textContent = 'Сначала загрузите модель.';
                 return;
             }
             runButton.disabled = true;
-            statusDiv.textContent = 'Инициализация аудио...';
+            statusDiv.textContent = 'Инициализация...';
+            console.log('Начало инициализации аудио и модели');
 
             try {
-                // Настройка AudioContext и Worklet
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const workletBlob = new Blob([audioWorkletCode], { type: 'application/javascript' });
-                const workletURL = URL.createObjectURL(workletBlob);
-                await audioContext.audioWorklet.addModule(workletURL);
+                // 1. Создаем распознаватель и загружаем модель
+                const modelFullURL = modelURL.substring(0, modelURL.lastIndexOf('/') + 1);
+                console.log('Создание распознавателя TM с URL:', { modelFullURL, metadataURL });
+                recognizer = tmAudio.create(
+                    {...window.location, pathname: modelFullURL},
+                    metadataURL
+                );
 
-                // Создание узла Worklet
-                noiseGateWorklet = new AudioWorkletNode(audioContext, 'dynamic-clap-gate');
-
-                // Получение микрофона
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const micSource = audioContext.createMediaStreamSource(stream);
-
-                // Соединение графа: Микрофон -> Worklet (Шумодав) -> Динамики
-                micSource.connect(noiseGateWorklet);
-                noiseGateWorklet.connect(audioContext.destination);
-
-                // Загрузка модели TM
-                statusDiv.textContent = 'Загрузка модели...';
-                const modelFullURL = modelURL.substring(0, modelURL.lastIndexOf('/') + 1); // URL без имени файла
-                recognizer = tmAudio.create(modelFullURL, metadataURL);
-
-                statusDiv.textContent = 'Запуск анализа...';
+                console.log('Ожидание загрузки модели...');
                 await recognizer.ensureModelLoaded();
+                console.log('Модель успешно загружена.');
 
-                statusDiv.textContent = 'Активно: слушаю...';
+                // 2. Запускаем прослушивание, чтобы TM активировала микрофон
+                // Это ключевой момент: TM сама создает AudioContext и MediaStream
+                statusDiv.textContent = 'Запрос доступа к микрофону...';
+                console.log('Запуск recognizer.listen() для активации аудиопотока...');
                 recognizer.listen(handlePrediction, {
                     includeSpectrogram: false,
-                    probabilityThreshold: 0.90, // Порог срабатывания
+                    probabilityThreshold: 0.90,
                     invokeCallbackOnNoiseAndUnknown: false
                 });
 
+                // 3. Получаем AudioContext и MediaStream *из* библиотеки TM
+                const audioContext = recognizer.audioContext;
+                const stream = recognizer.stream;
+
+                console.log('>>> Получен AudioContext от TM:', audioContext);
+                console.log('>>> Получен MediaStream от TM:', stream);
+
+                if (!audioContext || !stream || !stream.active) {
+                    throw new Error('Не удалось получить активный аудиопоток от Teachable Machine. Убедитесь, что доступ к микрофону разрешен.');
+                }
+
+                // 4. Настраиваем наш AudioWorklet в *том же самом* контексте
+                console.log('Настройка AudioWorklet в контексте TM...');
+                const workletBlob = new Blob([audioWorkletCode], { type: 'application/javascript' });
+                const workletURL = URL.createObjectURL(workletBlob);
+                await audioContext.audioWorklet.addModule(workletURL);
+                noiseGateWorklet = new AudioWorkletNode(audioContext, 'dynamic-clap-gate');
+                console.log('Узел AudioWorklet создан и добавлен в контекст TM.');
+
+                // 5. Строим наш собственный аудиограф, используя поток от TM
+                const micSource = audioContext.createMediaStreamSource(stream);
+                console.log('Создан MediaStreamSource из потока от TM.');
+
+                // Поток TM -> Наш Worklet (шумодав) -> Динамики
+                micSource.connect(noiseGateWorklet);
+                noiseGateWorklet.connect(audioContext.destination);
+                console.log('✅ Аудиограф успешно соединен: Поток TM -> Worklet -> Динамики');
+
+                statusDiv.textContent = 'Активно: слушаю...';
+
             } catch (error) {
-                statusDiv.textContent = `Ошибка инициализации: ${error.message}`;
-                console.error(error);
-                runButton.disabled = false; // Позволяем пользователю попробовать снова
+                statusDiv.textContent = `Ошибка: ${error.message}`;
+                console.error('Произошла фатальная ошибка при инициализации:', error);
+                runButton.disabled = false;
             }
         });
 
         // --- 4. Обработка предсказаний ---
         function handlePrediction(result) {
-            // Ищем класс "Хлопки" или "Clap"
+            // Логируем все предсказания для отладки
+            // console.log('Получены предсказания:', result.scores);
+
             for (const pred of result.scores) {
-                 // Название класса из metadata.json может быть разным
                 if ((pred.className.toLowerCase().includes('хлоп') || pred.className.toLowerCase().includes('clap')) && pred.score > 0.95) {
-                    console.log('Обнаружен хлопок!', pred.score);
-                    // Отправляем сообщение в Worklet
+                    console.log(`ОБНАРУЖЕН ХЛОПОК! Класс: "${pred.className}", Уверенность: ${pred.score.toFixed(2)}`);
                     if (noiseGateWorklet) {
+                        console.log('Отправка сообщения CLAP_DETECTED в AudioWorklet');
                         noiseGateWorklet.port.postMessage({ type: 'CLAP_DETECTED' });
                     }
                 }
