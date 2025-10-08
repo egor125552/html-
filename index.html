@@ -3,60 +3,240 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Text-to-Speech</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Интеллектуальное Подавление Хлопков</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 1.8em;
+            margin-bottom: 20px;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #555;
+            min-height: 25px;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .file-upload-label {
+            display: inline-block;
+            padding: 12px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+        }
+        .file-upload-label:hover {
+            background-color: #0056b3;
+        }
+        #run-button {
+            padding: 12px 20px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            margin-left: 10px;
+            transition: background-color 0.3s, opacity 0.3s;
+        }
+        #run-button:hover:not(:disabled) {
+            background-color: #218838;
+        }
+        #run-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Gemini Озвучка текста</h1>
-            <p>Продвинутый инструмент для преобразования текста в речь с настройками голоса, созданный для всех.</p>
-        </header>
-
-        <main>
-            <section class="generation-section" aria-labelledby="generation-heading">
-                <h2 id="generation-heading">1. Введите текст</h2>
-                <p>Вы можете управлять стилем речи прямо в тексте. Например, попробуйте написать: <br>
-                    <code>(Say in a happy tone) Привет, мир!</code> или <code>(Говорить шепотом) Это секрет.</code>
-                </p>
-                <textarea id="text-input" rows="8" placeholder="Введите ваш текст здесь..."></textarea>
-                <button id="speak-button" class="button-primary">Озвучить основной текст</button>
-                <div id="loading-spinner" class="spinner" style="display: none;" role="status" aria-live="polite">
-                    <p>Идет генерация...</p>
-                </div>
-                <audio id="audio-playback" controls aria-label="Проигрыватель сгенерированного аудио"></audio>
-            </section>
-
-            <section class="voice-selection-section" aria-labelledby="voice-heading">
-                <h2 id="voice-heading">2. Выберите голос</h2>
-                <p>Используйте стрелки для навигации, <kbd>Space</kbd> для прослушивания примера и <kbd>Enter</kbd> для выбора голоса.</p>
-                <div id="voice-combobox" class="voice-combobox">
-                    <div class="selected-voice" id="selected-voice" tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="voice-heading">
-                        <span id="selected-voice-name">Zephyr</span>
-                        <span class="arrow-down">▼</span>
-                    </div>
-                    <ul id="voice-list" class="voice-list" role="listbox" tabindex="-1" aria-labelledby="voice-heading">
-                        <!-- Голоса будут добавлены сюда с помощью JavaScript -->
-                    </ul>
-                </div>
-            </section>
-
-            <section class="info-section" aria-labelledby="info-heading">
-                <h2 id="info-heading">Дополнительная информация</h2>
-                <div id="network-test">
-                    <button id="network-test-button">Тестировать скорость сети</button>
-                    <p>Скорость вашего соединения: <span id="network-speed">неизвестно</span></p>
-                </div>
-                <div id="time-estimation">
-                    <p>Примерное время генерации: <span id="estimated-time">0 секунд</span></p>
-                </div>
-                <div id="speed-info">
-                    <h3>Рекомендуемая скорость интернета</h3>
-                    <p>Для комфортной работы приложения рекомендуется скорость соединения от 1 Мбит/с. При более низкой скорости возможны задержки.</p>
-                </div>
-            </section>
-        </main>
+        <h1>Подавление импульсного шума (хлопков)</h1>
+        <label for="zip-upload" class="file-upload-label">Загрузить ZIP-модель</label>
+        <input type="file" id="zip-upload" accept=".zip">
+        <button id="run-button" disabled>Запустить анализ</button>
+        <div id="status">Ожидание загрузки ZIP-архива...</div>
     </div>
-    <script src="script.js"></script>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const zipUploadInput = document.getElementById('zip-upload');
+        const runButton = document.getElementById('run-button');
+
+        let model, recognizer, noiseGateWorklet;
+        let modelURL, metadataURL;
+
+        // --- 1. Логика AudioWorklet ---
+        const audioWorkletCode = `
+            class DynamicClapGateProcessor extends AudioWorkletProcessor {
+                constructor() {
+                    super();
+                    this.targetGain = 1.0;
+                    this.currentGain = 1.0;
+                    this.attackTime = 0.005; // 5ms to ramp down
+                    this.releaseTime = 0.08; // 80ms to ramp up
+                    this.holdTime = 0.08; // 80ms hold low
+                    this.holdTimer = 0;
+
+                    this.port.onmessage = (event) => {
+                        if (event.data.type === 'CLAP_DETECTED') {
+                            this.targetGain = 0.01; // Почти полная тишина
+                            this.holdTimer = (this.holdTime * sampleRate);
+                        }
+                    };
+                }
+
+                process(inputs, outputs, parameters) {
+                    const input = inputs[0];
+                    const output = outputs[0];
+
+                    // Если гейт сработал, держим его некоторое время
+                    if (this.holdTimer > 0) {
+                        this.holdTimer -= 128; // 128 - размер блока по умолчанию
+                        this.targetGain = 0.01;
+                    } else {
+                        this.targetGain = 1.0; // Возвращаем громкость
+                    }
+
+                    // Плавное изменение громкости (ramping)
+                    for (let channel = 0; channel < input.length; channel++) {
+                        const inputChannel = input[channel];
+                        const outputChannel = output[channel];
+                        for (let i = 0; i < inputChannel.length; i++) {
+                            // Простое линейное приближение для плавности
+                            this.currentGain += (this.targetGain - this.currentGain) * (this.targetGain < this.currentGain ? this.attackTime : this.releaseTime);
+                            outputChannel[i] = inputChannel[i] * this.currentGain;
+                        }
+                    }
+
+                    return true; // Продолжаем обработку
+                }
+            }
+            registerProcessor('dynamic-clap-gate', DynamicClapGateProcessor);
+        `;
+
+        // --- 2. Обработка загрузки ZIP ---
+        zipUploadInput.addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            statusDiv.textContent = 'Распаковка ZIP-архива...';
+            try {
+                const jszip = new JSZip();
+                const zip = await jszip.loadAsync(file);
+
+                const modelJsonBlob = await zip.file('model.json').async('blob');
+                const weightsBinBlob = await zip.file('weights.bin').async('blob');
+                const metadataJsonBlob = await zip.file('metadata.json').async('blob');
+
+                // Проверяем, что все файлы на месте
+                if (!modelJsonBlob || !weightsBinBlob || !metadataJsonBlob) {
+                    throw new Error('ZIP-архив должен содержать model.json, weights.bin и metadata.json');
+                }
+
+                // Создаем временные URL
+                if (modelURL) URL.revokeObjectURL(modelURL);
+                if (metadataURL) URL.revokeObjectURL(metadataURL);
+
+                modelURL = URL.createObjectURL(new File([modelJsonBlob, weightsBinBlob], 'model.json'));
+                metadataURL = URL.createObjectURL(metadataJsonBlob);
+
+                statusDiv.textContent = 'Модель готова к запуску!';
+                runButton.disabled = false;
+
+            } catch (error) {
+                statusDiv.textContent = `Ошибка: ${error.message}`;
+                console.error(error);
+            }
+        });
+
+        // --- 3. Инициализация аудио и модели ---
+        runButton.addEventListener('click', async () => {
+            if (!modelURL || !metadataURL) {
+                statusDiv.textContent = 'Сначала загрузите модель.';
+                return;
+            }
+            runButton.disabled = true;
+            statusDiv.textContent = 'Инициализация аудио...';
+
+            try {
+                // Настройка AudioContext и Worklet
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const workletBlob = new Blob([audioWorkletCode], { type: 'application/javascript' });
+                const workletURL = URL.createObjectURL(workletBlob);
+                await audioContext.audioWorklet.addModule(workletURL);
+
+                // Создание узла Worklet
+                noiseGateWorklet = new AudioWorkletNode(audioContext, 'dynamic-clap-gate');
+
+                // Получение микрофона
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const micSource = audioContext.createMediaStreamSource(stream);
+
+                // Соединение графа: Микрофон -> Worklet (Шумодав) -> Динамики
+                micSource.connect(noiseGateWorklet);
+                noiseGateWorklet.connect(audioContext.destination);
+
+                // Загрузка модели TM
+                statusDiv.textContent = 'Загрузка модели...';
+                const modelFullURL = modelURL.substring(0, modelURL.lastIndexOf('/') + 1); // URL без имени файла
+                recognizer = tmAudio.create(modelFullURL, metadataURL);
+
+                statusDiv.textContent = 'Запуск анализа...';
+                await recognizer.ensureModelLoaded();
+
+                statusDiv.textContent = 'Активно: слушаю...';
+                recognizer.listen(handlePrediction, {
+                    includeSpectrogram: false,
+                    probabilityThreshold: 0.90, // Порог срабатывания
+                    invokeCallbackOnNoiseAndUnknown: false
+                });
+
+            } catch (error) {
+                statusDiv.textContent = `Ошибка инициализации: ${error.message}`;
+                console.error(error);
+                runButton.disabled = false; // Позволяем пользователю попробовать снова
+            }
+        });
+
+        // --- 4. Обработка предсказаний ---
+        function handlePrediction(result) {
+            // Ищем класс "Хлопки" или "Clap"
+            for (const pred of result.scores) {
+                 // Название класса из metadata.json может быть разным
+                if ((pred.className.toLowerCase().includes('хлоп') || pred.className.toLowerCase().includes('clap')) && pred.score > 0.95) {
+                    console.log('Обнаружен хлопок!', pred.score);
+                    // Отправляем сообщение в Worklet
+                    if (noiseGateWorklet) {
+                        noiseGateWorklet.port.postMessage({ type: 'CLAP_DETECTED' });
+                    }
+                }
+            }
+        }
+    </script>
 </body>
 </html>
