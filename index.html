@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Интеллектуальное Подавление Хлопков</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/audio@latest/dist/teachablemachine-audio.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
     <style>
@@ -99,27 +99,34 @@
                     this.currentGain = 1.0;
                     this.attackTime = 0.005; // 5ms to ramp down
                     this.releaseTime = 0.08; // 80ms to ramp up
-                    this.holdTime = 0.08; // 80ms hold low
+                    this.holdTime = 0.08;    // 80ms hold low
                     this.holdTimer = 0;
+                    this._clapDetected = false; // Флаг для безопасной активации
 
                     this.port.onmessage = (event) => {
                         if (event.data.type === 'CLAP_DETECTED') {
-                            this.targetGain = 0.01; // Почти полная тишина
-                            this.holdTimer = (this.holdTime * sampleRate);
+                            // Просто устанавливаем флаг, не используем sampleRate здесь
+                            this._clapDetected = true;
                         }
                     };
                 }
 
                 process(inputs, outputs, parameters) {
+                    // Проверяем флаг здесь, где sampleRate гарантированно доступен
+                    if (this._clapDetected) {
+                        this.holdTimer = this.holdTime * sampleRate;
+                        this._clapDetected = false; // Сбрасываем флаг
+                    }
+
                     const input = inputs[0];
                     const output = outputs[0];
 
-                    // Если гейт сработал, держим его некоторое время
+                    // Если таймер активен, держим гейт закрытым
                     if (this.holdTimer > 0) {
                         this.holdTimer -= 128; // 128 - размер блока по умолчанию
-                        this.targetGain = 0.01;
+                        this.targetGain = 0.01; // Целевая громкость - почти тишина
                     } else {
-                        this.targetGain = 1.0; // Возвращаем громкость
+                        this.targetGain = 1.0; // Возвращаем громкость к нормальной
                     }
 
                     // Плавное изменение громкости (ramping)
