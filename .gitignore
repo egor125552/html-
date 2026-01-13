@@ -1,0 +1,9 @@
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Shell scripts (if any are temporary)
+*.sh
+
+# Image files (like screenshots)
+*.png
