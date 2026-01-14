@@ -1,0 +1,3 @@
+# .gitignore for Python projects
+__pycache__/
+*.pyc
