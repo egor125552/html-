@@ -84,3 +84,17 @@ body[data-role="captain"] #repairButton { }
   .control { min-height: 4.5rem; font-size: .9rem; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+button.locked { opacity: .48; border-style: dashed; }
+button.recommended { border-color: var(--good); box-shadow: 0 0 0 2px rgba(170,242,154,.22); }
+body[data-accessibility="reader"] .control { touch-action: manipulation; }
+body[data-accessibility="reader"] button:active { transform: none; }
+.game-header-actions { display: grid; gap: .4rem; min-width: 10rem; }
+button[aria-disabled="true"] { opacity: .48; border-style: dashed; }
+button[aria-disabled="true"]:focus-visible { opacity: .78; }
+body[data-accessibility="reader"] .control { min-height: 4.8rem; }
+@media (max-width: 31rem) {
+  .game-header { align-items: stretch; }
+  .game-header-actions { grid-template-columns: 1fr; min-width: 8.5rem; }
+  .game-header-actions .small { font-size: .78rem; padding: .55rem; }
+}
