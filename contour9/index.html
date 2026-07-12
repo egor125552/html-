@@ -6,33 +6,37 @@
   <meta name="theme-color" content="#071019">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Контур-9 — аудио-игра</title>
+  <title>Контур-9 — свободная аудио-игра</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <a class="skip" href="#game">К игре</a>
   <main id="game" class="shell">
-    <header>
-      <p class="eyebrow">точный браузерный порт Python-версии</p>
+    <header class="hero">
+      <p class="eyebrow">аудио-побег с последствиями</p>
       <h1>Контур-9</h1>
-      <p class="subtitle">Выбраться из аварийного технического блока. Лучше играть в наушниках.</p>
-      <p class="preview-note">Браузерная версия синхронизирована с Python-движком. Все события озвучиваются встроенным синтезатором речи на медленной скорости.</p>
+      <p class="subtitle">Не ищи единственную правильную кнопку. Подходи к вещам, слушай, говори с людьми, ломай или сохраняй — сектор запоминает почти каждый выбор.</p>
     </header>
 
     <section id="startPanel" class="panel start-panel">
       <h2>Запуск аудиосистемы</h2>
-      <p>На iPhone звук и синтез речи разблокируются после первого нажатия. Игра сама озвучит помещение, цель, действия и доступные переходы.</p>
+      <p>Первое нажатие разблокирует звуки и синтез речи на iPhone. Основной голос говорит примерно на 76 процентах скорости; радио и люди звучат немного иначе.</p>
       <button id="startButton" class="primary">Запустить игру</button>
     </section>
 
     <section id="playPanel" hidden>
-      <div class="status-grid" aria-label="Состояние игры">
+      <section class="status-grid" aria-label="Состояние игры">
         <div><span class="status-label">Цель</span><strong id="objective">—</strong></div>
+        <div><span class="status-label">Где стоишь</span><strong id="position">—</strong></div>
+        <div><span class="status-label">Положение тела</span><strong id="stance">—</strong></div>
+        <div><span class="status-label">Здоровье</span><strong id="health">100</strong></div>
+        <div><span class="status-label">Шум</span><strong id="noise">0</strong></div>
+        <div><span class="status-label">Доверие людей</span><strong id="trust">0</strong></div>
+        <div><span class="status-label">Повреждения</span><strong id="damage">0</strong></div>
         <div><span class="status-label">Ходы</span><strong id="turns">0</strong></div>
-        <div><span class="status-label">Ошибки</span><strong id="mistakes">0</strong></div>
         <div><span class="status-label">Блокировка</span><strong id="countdown">неактивна</strong></div>
         <div><span class="status-label">Известный код</span><strong id="knownCode">ещё не найден</strong></div>
-      </div>
+      </section>
 
       <section class="panel location" aria-labelledby="roomName">
         <h2 id="roomName" tabindex="-1">Загрузка…</h2>
@@ -40,13 +44,24 @@
         <p id="message" class="message" role="status" aria-live="off" aria-atomic="true"></p>
       </section>
 
-      <section class="panel" aria-labelledby="actionsTitle">
-        <h2 id="actionsTitle">Действия</h2>
-        <div id="actions" class="button-list"></div>
+      <section class="panel" aria-labelledby="contextTitle">
+        <h2 id="contextTitle">Действия рядом</h2>
+        <p class="section-help">Набор меняется в зависимости от того, к чему ты подошёл.</p>
+        <div id="contextActions" class="button-list"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="approachTitle">
+        <h2 id="approachTitle">Подойти или изменить положение</h2>
+        <div id="approachActions" class="button-list"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="storyTitle">
+        <h2 id="storyTitle">Предметные и сюжетные действия</h2>
+        <div id="storyActions" class="button-list"></div>
       </section>
 
       <section class="panel" aria-labelledby="movesTitle">
-        <h2 id="movesTitle">Куда перейти</h2>
+        <h2 id="movesTitle">Перейти в другое помещение</h2>
         <div id="moves" class="button-list"></div>
       </section>
 
@@ -57,7 +72,7 @@
 
       <section id="codePanel" class="panel" hidden aria-labelledby="codeTitle">
         <h2 id="codeTitle">Кодовая панель</h2>
-        <p id="codeHint">Код ещё не найден. Его передаст аварийное радио после ремонта.</p>
+        <p id="codeHint">Код можно узнать несколькими способами.</p>
         <label for="codeInput">Трёхзначный код</label>
         <input id="codeInput" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off">
         <button id="submitCode" class="primary">Подтвердить код</button>
@@ -65,8 +80,8 @@
       </section>
 
       <section class="panel compact" aria-labelledby="controlsTitle">
-        <h2 id="controlsTitle">Управление</h2>
-        <p>На телефоне используй кнопки. R — повторить полное состояние. C — повторить код. M — эффекты. V — синтез речи. N — новая игра.</p>
+        <h2 id="controlsTitle">Управление и звук</h2>
+        <p>На телефоне используй кнопки. R — повторить всё голосом. C — повторить код. M — эффекты. V — речь. N — новая игра.</p>
         <div class="button-row">
           <button id="repeatButton">Повторить всё голосом</button>
           <button id="speechButton" aria-pressed="true">Синтез речи: включён</button>
@@ -81,8 +96,10 @@
       </details>
     </section>
   </main>
-<script src="core.js"></script>
-<script src="core-engine.js"></script>
-<script src="app.js"></script>
+  <script src="payload-core-1.js?v=3"></script>
+  <script src="payload-core-2.js?v=3"></script>
+  <script src="payload-core-3.js?v=3"></script>
+  <script src="payload-app.js?v=3"></script>
+  <script src="loader.js?v=3"></script>
 </body>
 </html>
