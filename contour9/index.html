@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#071019">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Контур-9 — аудио-игра</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#game">К игре</a>
+  <main id="game" class="shell">
+    <header>
+      <p class="eyebrow">точный браузерный порт Python-версии</p>
+      <h1>Контур-9</h1>
+      <p class="subtitle">Выбраться из аварийного технического блока. Лучше играть в наушниках.</p>
+      <p class="preview-note">Браузерная версия синхронизирована с Python-движком. Все события озвучиваются встроенным синтезатором речи на медленной скорости.</p>
+    </header>
+
+    <section id="startPanel" class="panel start-panel">
+      <h2>Запуск аудиосистемы</h2>
+      <p>На iPhone звук и синтез речи разблокируются после первого нажатия. Игра сама озвучит помещение, цель, действия и доступные переходы.</p>
+      <button id="startButton" class="primary">Запустить игру</button>
+    </section>
+
+    <section id="playPanel" hidden>
+      <div class="status-grid" aria-label="Состояние игры">
+        <div><span class="status-label">Цель</span><strong id="objective">—</strong></div>
+        <div><span class="status-label">Ходы</span><strong id="turns">0</strong></div>
+        <div><span class="status-label">Ошибки</span><strong id="mistakes">0</strong></div>
+        <div><span class="status-label">Блокировка</span><strong id="countdown">неактивна</strong></div>
+        <div><span class="status-label">Известный код</span><strong id="knownCode">ещё не найден</strong></div>
+      </div>
+
+      <section class="panel location" aria-labelledby="roomName">
+        <h2 id="roomName" tabindex="-1">Загрузка…</h2>
+        <p id="description"></p>
+        <p id="message" class="message" role="status" aria-live="off" aria-atomic="true"></p>
+      </section>
+
+      <section class="panel" aria-labelledby="actionsTitle">
+        <h2 id="actionsTitle">Действия</h2>
+        <div id="actions" class="button-list"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="movesTitle">
+        <h2 id="movesTitle">Куда перейти</h2>
+        <div id="moves" class="button-list"></div>
+      </section>
+
+      <section class="panel" aria-labelledby="inventoryTitle">
+        <h2 id="inventoryTitle">Инвентарь</h2>
+        <p id="inventory">Пусто</p>
+      </section>
+
+      <section id="codePanel" class="panel" hidden aria-labelledby="codeTitle">
+        <h2 id="codeTitle">Кодовая панель</h2>
+        <p id="codeHint">Код ещё не найден. Его передаст аварийное радио после ремонта.</p>
+        <label for="codeInput">Трёхзначный код</label>
+        <input id="codeInput" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off">
+        <button id="submitCode" class="primary">Подтвердить код</button>
+        <button id="repeatCodeButton" hidden>Повторить известный код</button>
+      </section>
+
+      <section class="panel compact" aria-labelledby="controlsTitle">
+        <h2 id="controlsTitle">Управление</h2>
+        <p>На телефоне используй кнопки. R — повторить полное состояние. C — повторить код. M — эффекты. V — синтез речи. N — новая игра.</p>
+        <div class="button-row">
+          <button id="repeatButton">Повторить всё голосом</button>
+          <button id="speechButton" aria-pressed="true">Синтез речи: включён</button>
+          <button id="soundButton" aria-pressed="true">Эффекты: включены</button>
+          <button id="newButton">Новая игра</button>
+        </div>
+      </section>
+
+      <details class="panel compact">
+        <summary>Последние события</summary>
+        <ol id="log"></ol>
+      </details>
+    </section>
+  </main>
+<script src="core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
