@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#071019">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Контур-9 — свободная аудио-игра</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Контур-9 — аудио-игра</title>
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <a class="skip" href="#game">К игре</a>
@@ -15,27 +15,22 @@
     <header class="hero">
       <p class="eyebrow">аудио-побег с последствиями</p>
       <h1>Контур-9</h1>
-      <p class="subtitle">Не ищи единственную правильную кнопку. Подходи к вещам, слушай, говори с людьми, ломай или сохраняй — сектор запоминает почти каждый выбор.</p>
+      <p class="subtitle">Основной маршрут снова быстрый и понятный. Дополнительные действия спрятаны в отдельный компактный блок и не мешают прохождению.</p>
     </header>
 
     <section id="startPanel" class="panel start-panel">
       <h2>Запуск аудиосистемы</h2>
-      <p>Первое нажатие разблокирует звуки и синтез речи на iPhone. Основной голос говорит примерно на 76 процентах скорости; радио и люди звучат немного иначе.</p>
+      <p>Первое нажатие разблокирует оригинальные звуки шагов, дверей и синтез речи. Основной голос говорит примерно на 76 процентах скорости.</p>
       <button id="startButton" class="primary">Запустить игру</button>
     </section>
 
     <section id="playPanel" hidden>
-      <section class="status-grid" aria-label="Состояние игры">
+      <section class="status-grid" aria-label="Главное состояние игры">
         <div><span class="status-label">Цель</span><strong id="objective">—</strong></div>
-        <div><span class="status-label">Где стоишь</span><strong id="position">—</strong></div>
-        <div><span class="status-label">Положение тела</span><strong id="stance">—</strong></div>
         <div><span class="status-label">Здоровье</span><strong id="health">100</strong></div>
-        <div><span class="status-label">Шум</span><strong id="noise">0</strong></div>
-        <div><span class="status-label">Доверие людей</span><strong id="trust">0</strong></div>
-        <div><span class="status-label">Повреждения</span><strong id="damage">0</strong></div>
         <div><span class="status-label">Ходы</span><strong id="turns">0</strong></div>
         <div><span class="status-label">Блокировка</span><strong id="countdown">неактивна</strong></div>
-        <div><span class="status-label">Известный код</span><strong id="knownCode">ещё не найден</strong></div>
+        <div><span class="status-label">Код</span><strong id="knownCode">ещё не найден</strong></div>
       </section>
 
       <section class="panel location" aria-labelledby="roomName">
@@ -44,24 +39,23 @@
         <p id="message" class="message" role="status" aria-live="off" aria-atomic="true"></p>
       </section>
 
-      <section class="panel" aria-labelledby="contextTitle">
-        <h2 id="contextTitle">Действия рядом</h2>
-        <p class="section-help">Набор меняется в зависимости от того, к чему ты подошёл.</p>
-        <div id="contextActions" class="button-list"></div>
+      <section class="panel" aria-labelledby="actionsTitle">
+        <h2 id="actionsTitle">Действия</h2>
+        <p class="section-help">Здесь только основные и сюжетные действия. Выбирай их, чтобы проходить игру без лишней возни.</p>
+        <div id="actions" class="button-list"></div>
       </section>
 
-      <section class="panel" aria-labelledby="approachTitle">
-        <h2 id="approachTitle">Подойти или изменить положение</h2>
-        <div id="approachActions" class="button-list"></div>
-      </section>
-
-      <section class="panel" aria-labelledby="storyTitle">
-        <h2 id="storyTitle">Предметные и сюжетные действия</h2>
-        <div id="storyActions" class="button-list"></div>
-      </section>
+      <details class="panel optional-panel">
+        <summary>Действия с окружением</summary>
+        <p class="section-help">Здесь можно стучать, толкать, трогать, бить и подробно изучать предметы. Повтор одного действия на 2-й, 3-й, 5-й и 10-й раз вызывает новые последствия.</p>
+        <label for="objectSelect">Объект</label>
+        <select id="objectSelect"></select>
+        <p id="environmentHint" class="section-help"></p>
+        <div id="environmentActions" class="button-list"></div>
+      </details>
 
       <section class="panel" aria-labelledby="movesTitle">
-        <h2 id="movesTitle">Перейти в другое помещение</h2>
+        <h2 id="movesTitle">Куда перейти</h2>
         <div id="moves" class="button-list"></div>
       </section>
 
@@ -69,6 +63,11 @@
         <h2 id="inventoryTitle">Инвентарь</h2>
         <p id="inventory">Пусто</p>
       </section>
+
+      <details class="panel compact">
+        <summary>Последствия решений</summary>
+        <p id="consequences">Пока последствий нет.</p>
+      </details>
 
       <section id="codePanel" class="panel" hidden aria-labelledby="codeTitle">
         <h2 id="codeTitle">Кодовая панель</h2>
@@ -79,16 +78,16 @@
         <button id="repeatCodeButton" hidden>Повторить известный код</button>
       </section>
 
-      <section class="panel compact" aria-labelledby="controlsTitle">
-        <h2 id="controlsTitle">Управление и звук</h2>
-        <p>На телефоне используй кнопки. R — повторить всё голосом. C — повторить код. M — эффекты. V — речь. N — новая игра.</p>
+      <details class="panel compact">
+        <summary>Управление и звук</summary>
+        <p>R — повторить всё голосом. C — повторить код. M — эффекты. V — речь. N — новая игра.</p>
         <div class="button-row">
           <button id="repeatButton">Повторить всё голосом</button>
           <button id="speechButton" aria-pressed="true">Синтез речи: включён</button>
           <button id="soundButton" aria-pressed="true">Эффекты: включены</button>
           <button id="newButton">Новая игра</button>
         </div>
-      </section>
+      </details>
 
       <details class="panel compact">
         <summary>Последние события</summary>
@@ -96,10 +95,10 @@
       </details>
     </section>
   </main>
-  <script src="payload-core-1.js?v=3"></script>
-  <script src="payload-core-2.js?v=3"></script>
-  <script src="payload-core-3.js?v=3"></script>
-  <script src="payload-app.js?v=3"></script>
-  <script src="loader.js?v=3"></script>
+  <script src="payload-core-1.js?v=4"></script>
+  <script src="payload-core-2.js?v=4"></script>
+  <script src="payload-core-3.js?v=4"></script>
+  <script src="payload-app.js?v=4"></script>
+  <script src="loader.js?v=4"></script>
 </body>
 </html>
