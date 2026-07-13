@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>Аудио в MIDI — локальный конвертер</title>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color-scheme: dark;
+      --bg: #111318;
+      --panel: #1b1f27;
+      --text: #f5f7fb;
+      --muted: #b8c0cc;
+      --border: #697386;
+      --focus: #9bc8ff;
+      --button: #e8eef7;
+      --button-text: #111318;
+      --danger: #ffb4ab;
+      --success: #b7f0c5;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.55;
+    }
+
+    main {
+      width: min(720px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: max(28px, env(safe-area-inset-top)) 0 max(40px, env(safe-area-inset-bottom));
+    }
+
+    h1 { font-size: clamp(1.8rem, 7vw, 2.7rem); line-height: 1.1; margin: 0 0 16px; }
+    h2 { font-size: 1.2rem; margin: 0 0 10px; }
+    p { margin: 0 0 14px; }
+    .muted { color: var(--muted); }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+
+    ol { padding-left: 24px; margin: 0; }
+    li + li { margin-top: 8px; }
+
+    .drop-zone {
+      display: block;
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 28px 18px;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .drop-zone:hover,
+    .drop-zone.dragging { border-color: var(--focus); }
+
+    .drop-zone:focus-visible,
+    button:focus-visible,
+    a:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 4px;
+    }
+
+    input[type="file"] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .filename {
+      display: block;
+      margin-top: 10px;
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .actions {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    button,
+    .download-link {
+      appearance: none;
+      width: 100%;
+      border: 0;
+      border-radius: 12px;
+      padding: 15px 18px;
+      font: inherit;
+      font-weight: 750;
+      text-align: center;
+      text-decoration: none;
+      background: var(--button);
+      color: var(--button-text);
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+    }
+
+    [hidden] { display: none !important; }
+
+    progress {
+      width: 100%;
+      height: 18px;
+      margin-top: 16px;
+    }
+
+    .status {
+      min-height: 1.6em;
+      margin-top: 12px;
+      font-weight: 650;
+    }
+
+    .status.error { color: var(--danger); }
+    .status.success { color: var(--success); }
+
+    .privacy {
+      margin-top: 16px;
+      padding-left: 14px;
+      border-left: 4px solid var(--success);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Аудио в MIDI</h1>
+    <p class="muted">Распознаёт ноты в MP3, M4A, WAV и FLAC. Лучше всего работает с голосом или одним инструментом.</p>
+
+    <section class="panel" aria-labelledby="how-title">
+      <h2 id="how-title">Как пользоваться</h2>
+      <ol>
+        <li>Выбери или перетащи аудиофайл.</li>
+        <li>Нажми «Конвертировать в MIDI», дождись обработки и скачай файл.</li>
+      </ol>
+    </section>
+
+    <section class="panel" aria-labelledby="convert-title">
+      <h2 id="convert-title">Конвертация</h2>
+
+      <label id="dropZone" class="drop-zone" for="audioFile" tabindex="0" role="button" aria-describedby="formatsHint">
+        Нажми, чтобы выбрать файл, или перетащи его сюда
+        <span id="selectedName" class="filename">Файл не выбран</span>
+      </label>
+      <input id="audioFile" type="file" accept=".mp3,.m4a,.wav,.flac,audio/mpeg,audio/mp4,audio/wav,audio/flac">
+      <p id="formatsHint" class="muted">Поддерживаемые расширения: MP3, M4A, WAV, FLAC. Максимальная длительность в этой версии — 10 минут.</p>
+
+      <div class="actions">
+        <button id="convertButton" type="button" disabled>Конвертировать в MIDI</button>
+        <a id="saveLink" class="download-link" href="#" download hidden>Скачать MIDI</a>
+      </div>
+
+      <progress id="progress" max="100" value="0" aria-label="Прогресс конвертации"></progress>
+      <p id="status" class="status" role="status" aria-live="polite">Выбери аудиофайл.</p>
+
+      <p class="privacy"><strong>Локальная обработка:</strong> выбранное аудио не загружается на сервер. При первом запуске браузер скачивает код распознавания и модель Spotify Basic Pitch.</p>
+    </section>
+  </main>
+
+  <script type="module">
+    const MODEL_URL = "https://cdn.jsdelivr.net/npm/@spotify/basic-pitch@1.0.1/model/model.json";
+    const BASIC_PITCH_URL = "https://esm.sh/@spotify/basic-pitch@1.0.1?bundle";
+    const MIDI_URL = "https://esm.sh/@tonejs/midi@2.0.28?bundle";
+    const TARGET_SAMPLE_RATE = 22050;
+    const MAX_DURATION_SECONDS = 10 * 60;
+    const ALLOWED_EXTENSIONS = new Set(["mp3", "m4a", "wav", "flac"]);
+
+    const fileInput = document.querySelector("#audioFile");
+    const dropZone = document.querySelector("#dropZone");
+    const selectedName = document.querySelector("#selectedName");
+    const convertButton = document.querySelector("#convertButton");
+    const saveLink = document.querySelector("#saveLink");
+    const progress = document.querySelector("#progress");
+    const status = document.querySelector("#status");
+
+    let selectedFile = null;
+    let midiObjectUrl = null;
+    let engineModulesPromise = null;
+
+    function setStatus(message, type = "") {
+      status.textContent = message;
+      status.className = `status ${type}`.trim();
+    }
+
+    function setProgress(value) {
+      const normalized = Math.max(0, Math.min(100, Math.round(value)));
+      progress.value = normalized;
+      progress.setAttribute("aria-valuenow", String(normalized));
+    }
+
+    function extensionOf(fileName) {
+      const parts = fileName.toLowerCase().split(".");
+      return parts.length > 1 ? parts.pop() : "";
+    }
+
+    function clearDownload() {
+      if (midiObjectUrl) {
+        URL.revokeObjectURL(midiObjectUrl);
+        midiObjectUrl = null;
+      }
+      saveLink.hidden = true;
+      saveLink.removeAttribute("href");
+      saveLink.removeAttribute("download");
+      saveLink.textContent = "Скачать MIDI";
+    }
+
+    function chooseFile(file) {
+      clearDownload();
+      setProgress(0);
+
+      if (!file) {
+        selectedFile = null;
+        selectedName.textContent = "Файл не выбран";
+        convertButton.disabled = true;
+        setStatus("Выбери аудиофайл.");
+        return;
+      }
+
+      const extension = extensionOf(file.name);
+      if (!ALLOWED_EXTENSIONS.has(extension)) {
+        selectedFile = null;
+        selectedName.textContent = "Неподдерживаемый файл";
+        convertButton.disabled = true;
+        setStatus("Нужен файл MP3, M4A, WAV или FLAC.", "error");
+        return;
+      }
+
+      selectedFile = file;
+      selectedName.textContent = `${file.name}, ${(file.size / 1024 / 1024).toFixed(1)} МБ`;
+      convertButton.disabled = false;
+      setStatus("Файл готов к обработке.");
+    }
+
+    fileInput.addEventListener("change", () => chooseFile(fileInput.files?.[0] ?? null));
+
+    dropZone.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        fileInput.click();
+      }
+    });
+
+    for (const eventName of ["dragenter", "dragover"]) {
+      dropZone.addEventListener(eventName, event => {
+        event.preventDefault();
+        dropZone.classList.add("dragging");
+      });
+    }
+
+    for (const eventName of ["dragleave", "drop"]) {
+      dropZone.addEventListener(eventName, event => {
+        event.preventDefault();
+        dropZone.classList.remove("dragging");
+      });
+    }
+
+    dropZone.addEventListener("drop", event => {
+      const file = event.dataTransfer?.files?.[0] ?? null;
+      chooseFile(file);
+    });
+
+    async function loadEngineModules() {
+      if (!engineModulesPromise) {
+        engineModulesPromise = Promise.all([
+          import(BASIC_PITCH_URL),
+          import(MIDI_URL),
+        ]).then(([basicPitchModule, midiModule]) => ({
+          ...basicPitchModule,
+          Midi: midiModule.Midi,
+        }));
+      }
+      return engineModulesPromise;
+    }
+
+    async function decodeAudio(file) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) throw new Error("Этот браузер не поддерживает Web Audio API.");
+
+      const audioContext = new AudioContextClass();
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        return await audioContext.decodeAudioData(arrayBuffer.slice(0));
+      } finally {
+        await audioContext.close().catch(() => {});
+      }
+    }
+
+    async function resampleToMono(audioBuffer) {
+      const frameCount = Math.max(1, Math.ceil(audioBuffer.duration * TARGET_SAMPLE_RATE));
+      const OfflineContextClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+      if (!OfflineContextClass) throw new Error("Браузер не умеет подготавливать звук для модели.");
+
+      const offline = new OfflineContextClass(1, frameCount, TARGET_SAMPLE_RATE);
+      const source = offline.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(offline.destination);
+      source.start(0);
+      return await offline.startRendering();
+    }
+
+    function buildMidi(notes, Midi) {
+      const midi = new Midi();
+      midi.header.setTempo(120);
+      const track = midi.addTrack();
+      track.name = "Распознанные ноты";
+
+      for (const note of notes) {
+        if (!Number.isFinite(note.startTimeSeconds) || !Number.isFinite(note.durationSeconds)) continue;
+        if (note.durationSeconds <= 0 || note.pitchMidi < 0 || note.pitchMidi > 127) continue;
+        track.addNote({
+          midi: Math.round(note.pitchMidi),
+          time: Math.max(0, note.startTimeSeconds),
+          duration: Math.max(0.03, note.durationSeconds),
+          velocity: Math.max(0.05, Math.min(1, note.amplitude || 0.7)),
+        });
+      }
+
+      return midi.toArray();
+    }
+
+    function safeBaseName(name) {
+      const withoutExtension = name.replace(/\.[^.]+$/, "");
+      return withoutExtension.replace(/[\\/:*?"<>|]+/g, "_").trim() || "audio";
+    }
+
+    saveLink.addEventListener("click", () => {
+      setStatus("Браузер начал сохранение MIDI. На iPhone файл появится в загрузках Safari или откроется меню сохранения.", "success");
+    });
+
+    convertButton.addEventListener("click", async () => {
+      if (!selectedFile) return;
+
+      convertButton.disabled = true;
+      clearDownload();
+      setProgress(1);
+
+      try {
+        setStatus("Загружаю движок распознавания…");
+        const {
+          BasicPitch,
+          addPitchBendsToNoteEvents,
+          noteFramesToTime,
+          outputToNotesPoly,
+          Midi,
+        } = await loadEngineModules();
+        setProgress(8);
+
+        setStatus("Читаю и декодирую аудио…");
+        const decoded = await decodeAudio(selectedFile);
+        if (decoded.duration > MAX_DURATION_SECONDS) {
+          throw new Error(`Файл длится ${Math.ceil(decoded.duration / 60)} мин. В этой версии максимум 10 минут.`);
+        }
+        setProgress(15);
+
+        setStatus("Перевожу звук в моно 22,05 кГц…");
+        const prepared = await resampleToMono(decoded);
+        setProgress(22);
+
+        setStatus("Загружаю модель Basic Pitch…");
+        const basicPitch = new BasicPitch(MODEL_URL);
+        await basicPitch.model;
+        setProgress(30);
+
+        const frames = [];
+        const onsets = [];
+        const contours = [];
+
+        setStatus("Распознаю ноты…");
+        await basicPitch.evaluateModel(
+          prepared,
+          (frameBatch, onsetBatch, contourBatch) => {
+            frames.push(...frameBatch);
+            onsets.push(...onsetBatch);
+            contours.push(...contourBatch);
+          },
+          fraction => {
+            setProgress(30 + fraction * 58);
+            setStatus(`Распознаю ноты… ${Math.round(fraction * 100)}%`);
+          },
+        );
+
+        setStatus("Собираю MIDI-файл…");
+        const rawNotes = outputToNotesPoly(frames, onsets, 0.5, 0.3, 5);
+        const notes = noteFramesToTime(addPitchBendsToNoteEvents(contours, rawNotes));
+
+        if (notes.length === 0) {
+          throw new Error("Модель не нашла уверенных нот. Попробуй запись погромче или с одним инструментом без ударных.");
+        }
+
+        const midiBytes = buildMidi(notes, Midi);
+        const midiBlob = new Blob([midiBytes], { type: "audio/midi" });
+        const midiFileName = `${safeBaseName(selectedFile.name)}.mid`;
+        midiObjectUrl = URL.createObjectURL(midiBlob);
+
+        saveLink.href = midiObjectUrl;
+        saveLink.download = midiFileName;
+        saveLink.textContent = `Скачать MIDI — ${notes.length} нот`;
+        saveLink.hidden = false;
+
+        setProgress(100);
+        setStatus(`Готово. Найдено нот: ${notes.length}. Нажми ссылку скачивания.`, "success");
+        saveLink.focus();
+      } catch (error) {
+        console.error(error);
+        setProgress(0);
+        const message = error instanceof Error ? error.message : String(error);
+        setStatus(`Ошибка: ${message}`, "error");
+      } finally {
+        convertButton.disabled = !selectedFile;
+      }
+    });
+
+    window.addEventListener("pagehide", () => {
+      if (midiObjectUrl) URL.revokeObjectURL(midiObjectUrl);
+    });
+
+    // MIDI хранится в памяти страницы до выбора нового файла или закрытия вкладки.
+  </script>
+</body>
+</html>
