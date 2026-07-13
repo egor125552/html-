@@ -24,18 +24,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Verify public fallback URL
+      - name: Checkout proposed changes
+        uses: actions/checkout@v4
+      - name: Verify batch converter page
         shell: bash
         run: |
           set -euo pipefail
-          url="https://raw.githack.com/egor125552/html-/gemini-tts-app/audio-to-midi/index.html"
-          code="$(curl --silent --show-error --location --max-time 30 \
-            -o /tmp/page.html -w '%{http_code}' "$url")"
-          echo "Public fallback HTTP status: ${code}"
-          test "$code" = "200"
-          grep -q 'Аудио в MIDI' /tmp/page.html
-          grep -q 'id="saveLink"' /tmp/page.html
-          echo "Public converter page is live."
+          page="audio-to-midi/index.html"
+          test -f "$page"
+          grep -q 'Аудио в MIDI' "$page"
+          grep -q 'type="file" multiple' "$page"
+          grep -q 'id="zipLink"' "$page"
+          grep -q 'jszip@3.10.1' "$page"
+          grep -q 'Конвертировать все в MIDI' "$page"
+          echo "Batch MIDI converter checks passed."
 
   deploy:
     if: github.event_name != 'pull_request'
