@@ -4,13 +4,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="color-scheme" content="dark light">
-  <title>Аудио в MIDI — локальный конвертер</title>
+  <title>Аудио в MIDI — пакетный локальный конвертер</title>
   <style>
     :root {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color-scheme: dark;
       --bg: #111318;
       --panel: #1b1f27;
+      --panel-soft: #151922;
       --text: #f5f7fb;
       --muted: #b8c0cc;
       --border: #697386;
@@ -19,6 +20,7 @@
       --button-text: #111318;
       --danger: #ffb4ab;
       --success: #b7f0c5;
+      --working: #ffd89b;
     }
 
     * { box-sizing: border-box; }
@@ -32,7 +34,7 @@
     }
 
     main {
-      width: min(720px, calc(100% - 32px));
+      width: min(760px, calc(100% - 32px));
       margin: 0 auto;
       padding: max(28px, env(safe-area-inset-top)) 0 max(40px, env(safe-area-inset-bottom));
     }
@@ -92,10 +94,59 @@
       overflow-wrap: anywhere;
     }
 
+    .file-list {
+      display: grid;
+      gap: 10px;
+      margin: 16px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .file-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-soft);
+    }
+
+    .file-main { min-width: 0; }
+    .file-name { display: block; font-weight: 750; overflow-wrap: anywhere; }
+    .file-meta { display: block; color: var(--muted); font-size: .92rem; }
+    .file-state { display: block; margin-top: 3px; font-size: .92rem; }
+    .file-state.success { color: var(--success); }
+    .file-state.error { color: var(--danger); }
+    .file-state.working { color: var(--working); }
+
+    .remove-button {
+      width: auto;
+      min-width: 44px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+    }
+
+    .file-download {
+      display: inline-block;
+      margin-top: 7px;
+      color: var(--focus);
+      font-weight: 700;
+    }
+
     .actions {
       display: grid;
       gap: 12px;
       margin-top: 16px;
+    }
+
+    .secondary-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
     }
 
     button,
@@ -112,6 +163,12 @@
       background: var(--button);
       color: var(--button-text);
       cursor: pointer;
+    }
+
+    button.secondary {
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
     }
 
     button:disabled {
@@ -141,40 +198,53 @@
       padding-left: 14px;
       border-left: 4px solid var(--success);
     }
+
+    @media (max-width: 520px) {
+      .secondary-actions { grid-template-columns: 1fr; }
+      .file-item { align-items: start; }
+    }
   </style>
 </head>
 <body>
   <main>
     <h1>Аудио в MIDI</h1>
-    <p class="muted">Распознаёт ноты в MP3, M4A, WAV и FLAC. Лучше всего работает с голосом или одним инструментом.</p>
+    <p class="muted">Пакетно распознаёт ноты в MP3, M4A, WAV и FLAC. Можно выбрать сразу несколько отдельных дорожек и скачать все результаты одним ZIP-архивом.</p>
 
     <section class="panel" aria-labelledby="how-title">
       <h2 id="how-title">Как пользоваться</h2>
       <ol>
-        <li>Выбери или перетащи аудиофайл.</li>
-        <li>Нажми «Конвертировать в MIDI», дождись обработки и скачай файл.</li>
+        <li>Выбери или перетащи один или несколько аудиофайлов.</li>
+        <li>Проверь список дорожек и при необходимости удали лишние.</li>
+        <li>Нажми «Конвертировать все в MIDI».</li>
+        <li>Скачай MIDI по отдельности или один ZIP со всеми файлами.</li>
       </ol>
     </section>
 
     <section class="panel" aria-labelledby="convert-title">
-      <h2 id="convert-title">Конвертация</h2>
+      <h2 id="convert-title">Пакетная конвертация</h2>
 
-      <label id="dropZone" class="drop-zone" for="audioFile" tabindex="0" role="button" aria-describedby="formatsHint">
-        Нажми, чтобы выбрать файл, или перетащи его сюда
-        <span id="selectedName" class="filename">Файл не выбран</span>
+      <label id="dropZone" class="drop-zone" for="audioFiles" tabindex="0" role="button" aria-describedby="formatsHint">
+        Нажми, чтобы выбрать дорожки, или перетащи их сюда
+        <span id="selectedSummary" class="filename">Файлы не выбраны</span>
       </label>
-      <input id="audioFile" type="file" accept=".mp3,.m4a,.wav,.flac,audio/mpeg,audio/mp4,audio/wav,audio/flac">
-      <p id="formatsHint" class="muted">Поддерживаемые расширения: MP3, M4A, WAV, FLAC. Максимальная длительность в этой версии — 10 минут.</p>
+      <input id="audioFiles" type="file" multiple accept=".mp3,.m4a,.wav,.flac,audio/mpeg,audio/mp4,audio/wav,audio/flac">
+      <p id="formatsHint" class="muted">Поддерживаемые расширения: MP3, M4A, WAV, FLAC. Каждый файл может длиться до 10 минут. Новые файлы добавляются к уже выбранным.</p>
+
+      <ul id="fileList" class="file-list" aria-label="Выбранные дорожки"></ul>
 
       <div class="actions">
-        <button id="convertButton" type="button" disabled>Конвертировать в MIDI</button>
-        <a id="saveLink" class="download-link" href="#" download hidden>Скачать MIDI</a>
+        <button id="convertButton" type="button" disabled>Конвертировать все в MIDI</button>
+        <a id="zipLink" class="download-link" href="#" download hidden>Скачать ZIP со всеми MIDI</a>
+        <div class="secondary-actions">
+          <button id="addMoreButton" class="secondary" type="button">Добавить ещё файлы</button>
+          <button id="clearButton" class="secondary" type="button" disabled>Очистить список</button>
+        </div>
       </div>
 
-      <progress id="progress" max="100" value="0" aria-label="Прогресс конвертации"></progress>
-      <p id="status" class="status" role="status" aria-live="polite">Выбери аудиофайл.</p>
+      <progress id="progress" max="100" value="0" aria-label="Общий прогресс конвертации"></progress>
+      <p id="status" class="status" role="status" aria-live="polite">Выбери один или несколько аудиофайлов.</p>
 
-      <p class="privacy"><strong>Локальная обработка:</strong> выбранное аудио не загружается на сервер. При первом запуске браузер скачивает код распознавания и модель Spotify Basic Pitch.</p>
+      <p class="privacy"><strong>Локальная обработка:</strong> выбранное аудио не загружается на сервер. MIDI и ZIP собираются прямо в памяти браузера. При первом запуске браузер скачивает код распознавания, модель Spotify Basic Pitch и библиотеку ZIP.</p>
     </section>
   </main>
 
@@ -182,21 +252,27 @@
     const MODEL_URL = "https://cdn.jsdelivr.net/npm/@spotify/basic-pitch@1.0.1/model/model.json";
     const BASIC_PITCH_URL = "https://esm.sh/@spotify/basic-pitch@1.0.1?bundle";
     const MIDI_URL = "https://esm.sh/@tonejs/midi@2.0.28?bundle";
+    const JSZIP_URL = "https://esm.sh/jszip@3.10.1?bundle";
     const TARGET_SAMPLE_RATE = 22050;
     const MAX_DURATION_SECONDS = 10 * 60;
     const ALLOWED_EXTENSIONS = new Set(["mp3", "m4a", "wav", "flac"]);
 
-    const fileInput = document.querySelector("#audioFile");
+    const fileInput = document.querySelector("#audioFiles");
     const dropZone = document.querySelector("#dropZone");
-    const selectedName = document.querySelector("#selectedName");
+    const selectedSummary = document.querySelector("#selectedSummary");
+    const fileList = document.querySelector("#fileList");
     const convertButton = document.querySelector("#convertButton");
-    const saveLink = document.querySelector("#saveLink");
+    const zipLink = document.querySelector("#zipLink");
+    const addMoreButton = document.querySelector("#addMoreButton");
+    const clearButton = document.querySelector("#clearButton");
     const progress = document.querySelector("#progress");
     const status = document.querySelector("#status");
 
-    let selectedFile = null;
-    let midiObjectUrl = null;
+    let entries = [];
+    let nextEntryId = 1;
+    let zipObjectUrl = null;
     let engineModulesPromise = null;
+    let isConverting = false;
 
     function setStatus(message, type = "") {
       status.textContent = message;
@@ -214,47 +290,194 @@
       return parts.length > 1 ? parts.pop() : "";
     }
 
-    function clearDownload() {
-      if (midiObjectUrl) {
-        URL.revokeObjectURL(midiObjectUrl);
-        midiObjectUrl = null;
-      }
-      saveLink.hidden = true;
-      saveLink.removeAttribute("href");
-      saveLink.removeAttribute("download");
-      saveLink.textContent = "Скачать MIDI";
+    function safeBaseName(name) {
+      const withoutExtension = name.replace(/\.[^.]+$/, "");
+      return withoutExtension.replace(/[\\/:*?"<>|]+/g, "_").trim() || "audio";
     }
 
-    function chooseFile(file) {
-      clearDownload();
+    function formatSize(bytes) {
+      if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+      return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
+    }
+
+    function createEntry(file) {
+      return {
+        id: nextEntryId++,
+        file,
+        state: "ready",
+        message: "Готов к обработке",
+        notesCount: 0,
+        midiBytes: null,
+        midiFileName: "",
+        midiObjectUrl: null,
+      };
+    }
+
+    function clearEntryResult(entry) {
+      if (entry.midiObjectUrl) URL.revokeObjectURL(entry.midiObjectUrl);
+      entry.midiObjectUrl = null;
+      entry.midiBytes = null;
+      entry.midiFileName = "";
+      entry.notesCount = 0;
+      if (entry.state !== "working") {
+        entry.state = "ready";
+        entry.message = "Готов к обработке";
+      }
+    }
+
+    function clearZipDownload() {
+      if (zipObjectUrl) URL.revokeObjectURL(zipObjectUrl);
+      zipObjectUrl = null;
+      zipLink.hidden = true;
+      zipLink.removeAttribute("href");
+      zipLink.removeAttribute("download");
+    }
+
+    function makeUniqueMidiNames(targetEntries) {
+      const used = new Map();
+      for (const entry of targetEntries) {
+        const base = safeBaseName(entry.file.name);
+        const count = (used.get(base.toLowerCase()) || 0) + 1;
+        used.set(base.toLowerCase(), count);
+        entry.midiFileName = count === 1 ? `${base}.mid` : `${base}_${count}.mid`;
+      }
+    }
+
+    function renderEntries() {
+      fileList.textContent = "";
+
+      for (const entry of entries) {
+        const item = document.createElement("li");
+        item.className = "file-item";
+
+        const main = document.createElement("div");
+        main.className = "file-main";
+
+        const name = document.createElement("span");
+        name.className = "file-name";
+        name.textContent = entry.file.name;
+
+        const meta = document.createElement("span");
+        meta.className = "file-meta";
+        meta.textContent = formatSize(entry.file.size);
+
+        const state = document.createElement("span");
+        state.className = `file-state ${entry.state === "done" ? "success" : entry.state}`.trim();
+        state.textContent = entry.message;
+
+        main.append(name, meta, state);
+
+        if (entry.midiBytes && entry.midiObjectUrl) {
+          const download = document.createElement("a");
+          download.className = "file-download";
+          download.href = entry.midiObjectUrl;
+          download.download = entry.midiFileName;
+          download.textContent = `Скачать ${entry.midiFileName}`;
+          download.addEventListener("click", () => {
+            setStatus(`Сохраняю ${entry.midiFileName}.`, "success");
+          });
+          main.append(download);
+        }
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "remove-button";
+        remove.setAttribute("aria-label", `Удалить ${entry.file.name}`);
+        remove.textContent = "×";
+        remove.disabled = isConverting;
+        remove.addEventListener("click", () => removeEntry(entry.id));
+
+        item.append(main, remove);
+        fileList.append(item);
+      }
+
+      if (entries.length === 0) {
+        selectedSummary.textContent = "Файлы не выбраны";
+      } else if (entries.length === 1) {
+        selectedSummary.textContent = `Выбран 1 файл: ${entries[0].file.name}`;
+      } else {
+        const totalSize = entries.reduce((sum, entry) => sum + entry.file.size, 0);
+        selectedSummary.textContent = `Выбрано файлов: ${entries.length}, всего ${formatSize(totalSize)}`;
+      }
+
+      const hasFiles = entries.length > 0;
+      convertButton.disabled = !hasFiles || isConverting;
+      clearButton.disabled = !hasFiles || isConverting;
+      addMoreButton.disabled = isConverting;
+      dropZone.setAttribute("aria-disabled", String(isConverting));
+    }
+
+    function removeEntry(id) {
+      if (isConverting) return;
+      const entry = entries.find(item => item.id === id);
+      if (entry?.midiObjectUrl) URL.revokeObjectURL(entry.midiObjectUrl);
+      entries = entries.filter(item => item.id !== id);
+      clearZipDownload();
+      setProgress(0);
+      renderEntries();
+      setStatus(entries.length ? "Список дорожек обновлён." : "Выбери один или несколько аудиофайлов.");
+    }
+
+    function addFiles(fileCollection) {
+      if (isConverting) return;
+      const incoming = Array.from(fileCollection || []);
+      if (incoming.length === 0) return;
+
+      clearZipDownload();
       setProgress(0);
 
-      if (!file) {
-        selectedFile = null;
-        selectedName.textContent = "Файл не выбран";
-        convertButton.disabled = true;
-        setStatus("Выбери аудиофайл.");
-        return;
+      const rejected = [];
+      let added = 0;
+
+      for (const file of incoming) {
+        const extension = extensionOf(file.name);
+        if (!ALLOWED_EXTENSIONS.has(extension)) {
+          rejected.push(file.name);
+          continue;
+        }
+
+        const duplicate = entries.some(entry =>
+          entry.file.name === file.name
+          && entry.file.size === file.size
+          && entry.file.lastModified === file.lastModified
+        );
+        if (duplicate) continue;
+
+        entries.push(createEntry(file));
+        added += 1;
       }
 
-      const extension = extensionOf(file.name);
-      if (!ALLOWED_EXTENSIONS.has(extension)) {
-        selectedFile = null;
-        selectedName.textContent = "Неподдерживаемый файл";
-        convertButton.disabled = true;
-        setStatus("Нужен файл MP3, M4A, WAV или FLAC.", "error");
-        return;
+      renderEntries();
+
+      if (rejected.length > 0) {
+        setStatus(`Добавлено: ${added}. Пропущены неподдерживаемые файлы: ${rejected.join(", ")}.`, "error");
+      } else if (added > 0) {
+        setStatus(`Добавлено дорожек: ${added}. Всего в очереди: ${entries.length}.`);
+      } else {
+        setStatus("Новых файлов не добавлено: такие дорожки уже есть в списке.");
       }
 
-      selectedFile = file;
-      selectedName.textContent = `${file.name}, ${(file.size / 1024 / 1024).toFixed(1)} МБ`;
-      convertButton.disabled = false;
-      setStatus("Файл готов к обработке.");
+      fileInput.value = "";
     }
 
-    fileInput.addEventListener("change", () => chooseFile(fileInput.files?.[0] ?? null));
+    function clearAll() {
+      if (isConverting) return;
+      for (const entry of entries) {
+        if (entry.midiObjectUrl) URL.revokeObjectURL(entry.midiObjectUrl);
+      }
+      entries = [];
+      clearZipDownload();
+      setProgress(0);
+      renderEntries();
+      setStatus("Выбери один или несколько аудиофайлов.");
+    }
+
+    fileInput.addEventListener("change", () => addFiles(fileInput.files));
+    addMoreButton.addEventListener("click", () => fileInput.click());
+    clearButton.addEventListener("click", clearAll);
 
     dropZone.addEventListener("keydown", event => {
+      if (isConverting) return;
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         fileInput.click();
@@ -264,7 +487,7 @@
     for (const eventName of ["dragenter", "dragover"]) {
       dropZone.addEventListener(eventName, event => {
         event.preventDefault();
-        dropZone.classList.add("dragging");
+        if (!isConverting) dropZone.classList.add("dragging");
       });
     }
 
@@ -276,8 +499,8 @@
     }
 
     dropZone.addEventListener("drop", event => {
-      const file = event.dataTransfer?.files?.[0] ?? null;
-      chooseFile(file);
+      if (isConverting) return;
+      addFiles(event.dataTransfer?.files);
     });
 
     async function loadEngineModules() {
@@ -285,9 +508,11 @@
         engineModulesPromise = Promise.all([
           import(BASIC_PITCH_URL),
           import(MIDI_URL),
-        ]).then(([basicPitchModule, midiModule]) => ({
+          import(JSZIP_URL),
+        ]).then(([basicPitchModule, midiModule, jsZipModule]) => ({
           ...basicPitchModule,
           Midi: midiModule.Midi,
+          JSZip: jsZipModule.default || jsZipModule.JSZip || jsZipModule,
         }));
       }
       return engineModulesPromise;
@@ -319,11 +544,11 @@
       return await offline.startRendering();
     }
 
-    function buildMidi(notes, Midi) {
+    function buildMidi(notes, Midi, trackName) {
       const midi = new Midi();
       midi.header.setTempo(120);
       const track = midi.addTrack();
-      track.name = "Распознанные ноты";
+      track.name = trackName || "Распознанные ноты";
 
       for (const note of notes) {
         if (!Number.isFinite(note.startTimeSeconds) || !Number.isFinite(note.durationSeconds)) continue;
@@ -339,103 +564,163 @@
       return midi.toArray();
     }
 
-    function safeBaseName(name) {
-      const withoutExtension = name.replace(/\.[^.]+$/, "");
-      return withoutExtension.replace(/[\\/:*?"<>|]+/g, "_").trim() || "audio";
+    async function convertOne(entry, engine, fileIndex, fileCount) {
+      entry.state = "working";
+      entry.message = "Читаю аудио…";
+      renderEntries();
+
+      const decoded = await decodeAudio(entry.file);
+      if (decoded.duration > MAX_DURATION_SECONDS) {
+        throw new Error(`длительность ${Math.ceil(decoded.duration / 60)} мин., максимум 10 минут`);
+      }
+
+      entry.message = "Подготавливаю звук…";
+      renderEntries();
+      const prepared = await resampleToMono(decoded);
+
+      const frames = [];
+      const onsets = [];
+      const contours = [];
+
+      entry.message = "Распознаю ноты…";
+      renderEntries();
+
+      await engine.basicPitch.evaluateModel(
+        prepared,
+        (frameBatch, onsetBatch, contourBatch) => {
+          frames.push(...frameBatch);
+          onsets.push(...onsetBatch);
+          contours.push(...contourBatch);
+        },
+        fraction => {
+          const overall = ((fileIndex + fraction) / fileCount) * 92;
+          setProgress(5 + overall);
+          entry.message = `Распознаю ноты… ${Math.round(fraction * 100)}%`;
+          renderEntries();
+          setStatus(`Файл ${fileIndex + 1} из ${fileCount}: ${entry.file.name}`);
+        },
+      );
+
+      const rawNotes = engine.outputToNotesPoly(frames, onsets, 0.5, 0.3, 5);
+      const notes = engine.noteFramesToTime(
+        engine.addPitchBendsToNoteEvents(contours, rawNotes),
+      );
+
+      if (notes.length === 0) {
+        throw new Error("модель не нашла уверенных нот");
+      }
+
+      const midiBytes = buildMidi(notes, engine.Midi, safeBaseName(entry.file.name));
+      const midiBlob = new Blob([midiBytes], { type: "audio/midi" });
+
+      entry.midiBytes = midiBytes;
+      entry.notesCount = notes.length;
+      entry.midiObjectUrl = URL.createObjectURL(midiBlob);
+      entry.state = "done";
+      entry.message = `Готово: ${notes.length} нот`;
+      renderEntries();
     }
 
-    saveLink.addEventListener("click", () => {
-      setStatus("Браузер начал сохранение MIDI. На iPhone файл появится в загрузках Safari или откроется меню сохранения.", "success");
-    });
+    async function buildZip(JSZip, successfulEntries) {
+      const zip = new JSZip();
+      for (const entry of successfulEntries) {
+        zip.file(entry.midiFileName, entry.midiBytes);
+      }
+
+      const manifestLines = [
+        "Пакет MIDI создан локальным конвертером Audio to MIDI.",
+        "",
+        `Файлов: ${successfulEntries.length}`,
+        ...successfulEntries.map(entry => `- ${entry.midiFileName}: ${entry.notesCount} нот`),
+      ];
+      zip.file("README.txt", manifestLines.join("\n"));
+
+      return await zip.generateAsync(
+        { type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } },
+        metadata => {
+          setProgress(97 + metadata.percent * 0.03);
+          setStatus(`Собираю ZIP… ${Math.round(metadata.percent)}%`);
+        },
+      );
+    }
 
     convertButton.addEventListener("click", async () => {
-      if (!selectedFile) return;
+      if (entries.length === 0 || isConverting) return;
 
-      convertButton.disabled = true;
-      clearDownload();
+      isConverting = true;
+      clearZipDownload();
       setProgress(1);
 
+      for (const entry of entries) clearEntryResult(entry);
+      makeUniqueMidiNames(entries);
+      renderEntries();
+
       try {
-        setStatus("Загружаю движок распознавания…");
-        const {
-          BasicPitch,
-          addPitchBendsToNoteEvents,
-          noteFramesToTime,
-          outputToNotesPoly,
-          Midi,
-        } = await loadEngineModules();
-        setProgress(8);
-
-        setStatus("Читаю и декодирую аудио…");
-        const decoded = await decodeAudio(selectedFile);
-        if (decoded.duration > MAX_DURATION_SECONDS) {
-          throw new Error(`Файл длится ${Math.ceil(decoded.duration / 60)} мин. В этой версии максимум 10 минут.`);
-        }
-        setProgress(15);
-
-        setStatus("Перевожу звук в моно 22,05 кГц…");
-        const prepared = await resampleToMono(decoded);
-        setProgress(22);
-
-        setStatus("Загружаю модель Basic Pitch…");
-        const basicPitch = new BasicPitch(MODEL_URL);
+        setStatus("Загружаю движок распознавания и ZIP…");
+        const modules = await loadEngineModules();
+        const basicPitch = new modules.BasicPitch(MODEL_URL);
         await basicPitch.model;
-        setProgress(30);
+        setProgress(5);
 
-        const frames = [];
-        const onsets = [];
-        const contours = [];
+        const engine = { ...modules, basicPitch };
 
-        setStatus("Распознаю ноты…");
-        await basicPitch.evaluateModel(
-          prepared,
-          (frameBatch, onsetBatch, contourBatch) => {
-            frames.push(...frameBatch);
-            onsets.push(...onsetBatch);
-            contours.push(...contourBatch);
-          },
-          fraction => {
-            setProgress(30 + fraction * 58);
-            setStatus(`Распознаю ноты… ${Math.round(fraction * 100)}%`);
-          },
-        );
-
-        setStatus("Собираю MIDI-файл…");
-        const rawNotes = outputToNotesPoly(frames, onsets, 0.5, 0.3, 5);
-        const notes = noteFramesToTime(addPitchBendsToNoteEvents(contours, rawNotes));
-
-        if (notes.length === 0) {
-          throw new Error("Модель не нашла уверенных нот. Попробуй запись погромче или с одним инструментом без ударных.");
+        for (let index = 0; index < entries.length; index += 1) {
+          const entry = entries[index];
+          try {
+            await convertOne(entry, engine, index, entries.length);
+          } catch (error) {
+            console.error(error);
+            entry.state = "error";
+            const message = error instanceof Error ? error.message : String(error);
+            entry.message = `Ошибка: ${message}`;
+            renderEntries();
+          }
         }
 
-        const midiBytes = buildMidi(notes, Midi);
-        const midiBlob = new Blob([midiBytes], { type: "audio/midi" });
-        const midiFileName = `${safeBaseName(selectedFile.name)}.mid`;
-        midiObjectUrl = URL.createObjectURL(midiBlob);
+        const successful = entries.filter(entry => entry.midiBytes);
+        if (successful.length === 0) {
+          throw new Error("Ни один файл не удалось преобразовать.");
+        }
 
-        saveLink.href = midiObjectUrl;
-        saveLink.download = midiFileName;
-        saveLink.textContent = `Скачать MIDI — ${notes.length} нот`;
-        saveLink.hidden = false;
+        setProgress(97);
+        const zipBlob = await buildZip(modules.JSZip, successful);
+        zipObjectUrl = URL.createObjectURL(zipBlob);
+        zipLink.href = zipObjectUrl;
+        zipLink.download = `midi_tracks_${successful.length}.zip`;
+        zipLink.textContent = `Скачать ZIP — ${successful.length} MIDI`;
+        zipLink.hidden = false;
 
         setProgress(100);
-        setStatus(`Готово. Найдено нот: ${notes.length}. Нажми ссылку скачивания.`, "success");
-        saveLink.focus();
+        const failedCount = entries.length - successful.length;
+        if (failedCount > 0) {
+          setStatus(`Готово MIDI: ${successful.length}. С ошибкой: ${failedCount}. ZIP содержит только успешные файлы.`, "error");
+        } else {
+          setStatus(`Готово. В ZIP собрано MIDI-файлов: ${successful.length}.`, "success");
+        }
+        zipLink.focus();
       } catch (error) {
         console.error(error);
         setProgress(0);
         const message = error instanceof Error ? error.message : String(error);
         setStatus(`Ошибка: ${message}`, "error");
       } finally {
-        convertButton.disabled = !selectedFile;
+        isConverting = false;
+        renderEntries();
       }
     });
 
-    window.addEventListener("pagehide", () => {
-      if (midiObjectUrl) URL.revokeObjectURL(midiObjectUrl);
+    zipLink.addEventListener("click", () => {
+      setStatus("Браузер начал сохранение ZIP. На iPhone архив появится в загрузках Safari или откроется меню сохранения.", "success");
     });
 
-    // MIDI хранится в памяти страницы до выбора нового файла или закрытия вкладки.
+    window.addEventListener("pagehide", () => {
+      clearZipDownload();
+      for (const entry of entries) {
+        if (entry.midiObjectUrl) URL.revokeObjectURL(entry.midiObjectUrl);
+      }
+    });
+
+    renderEntries();
   </script>
 </body>
 </html>
