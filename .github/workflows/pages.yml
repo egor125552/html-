@@ -28,8 +28,7 @@ jobs:
         shell: bash
         run: |
           set -u
-          for repo in=-archipelago- Applio atomic-heart-edition autozakachka-youtube html- silver-guacamole; do
-            repo="${repo#=}"
+          for repo in -archipelago- Applio atomic-heart-edition autozakachka-youtube html- silver-guacamole; do
             api="https://api.github.com/repos/egor125552/${repo}/pages"
             code="$(curl --silent --show-error --location \
               -H "Accept: application/vnd.github+json" \
