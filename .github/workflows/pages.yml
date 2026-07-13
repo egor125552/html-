@@ -24,22 +24,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - name: Diagnose GitHub Pages configuration
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Find an enabled GitHub Pages repository
         shell: bash
         run: |
-          set -uo pipefail
-          api="https://api.github.com/repos/egor125552/html-/pages"
-          code="$(curl --silent --show-error --location \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            -o /tmp/pages.json -w '%{http_code}' "$api")"
-          echo "Pages API HTTP status: ${code}"
-          cat /tmp/pages.json
+          set -u
+          for repo in=-archipelago- Applio atomic-heart-edition autozakachka-youtube html- silver-guacamole; do
+            repo="${repo#=}"
+            api="https://api.github.com/repos/egor125552/${repo}/pages"
+            code="$(curl --silent --show-error --location \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -o "/tmp/${repo}.json" -w '%{http_code}' "$api")"
+            echo "REPOSITORY=${repo} HTTP=${code}"
+            if [ "$code" = "200" ]; then
+              cat "/tmp/${repo}.json"
+              echo
+            fi
+          done
 
-      - name: Verify public GitHub Pages URL
+      - name: Verify current target URL
         shell: bash
         run: |
           set -uo pipefail
@@ -47,11 +50,8 @@ jobs:
           code="$(curl --silent --show-error --location --max-time 30 \
             -o /tmp/page.html -w '%{http_code}' "$url")"
           echo "Public page HTTP status: ${code}"
-          head -c 500 /tmp/page.html || true
-          echo
           test "$code" = "200"
           grep -q 'Аудио в MIDI' /tmp/page.html
-          echo "GitHub Pages is live and returned the converter page."
 
   deploy:
     if: github.event_name != 'pull_request'
@@ -62,15 +62,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Configure Pages
         uses: actions/configure-pages@v5
-
       - name: Upload site
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
-
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
