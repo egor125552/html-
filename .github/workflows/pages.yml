@@ -1,7 +1,10 @@
-name: Deploy static site to Pages
+name: Deploy and verify static site
 
 on:
   push:
+    branches:
+      - gemini-tts-app
+  pull_request:
     branches:
       - gemini-tts-app
   workflow_dispatch:
@@ -12,11 +15,45 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: pages-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
+  verify:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate converter source
+        run: |
+          test -f audio-to-midi/index.html
+          grep -q '<title>Аудио в MIDI' audio-to-midi/index.html
+          grep -q 'id="saveLink"' audio-to-midi/index.html
+
+      - name: Verify public GitHub Pages URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://egor125552.github.io/html-/audio-to-midi/"
+          for attempt in {1..24}; do
+            echo "Attempt ${attempt}: ${url}"
+            if body="$(curl --fail --silent --show-error --location --max-time 30 "$url")"; then
+              if grep -q 'Аудио в MIDI' <<<"$body"; then
+                echo "GitHub Pages is live and returned the converter page."
+                exit 0
+              fi
+              echo "URL responded, but the expected page title was not found."
+            fi
+            sleep 10
+          done
+          echo "GitHub Pages did not return the expected converter page."
+          exit 1
+
   deploy:
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
