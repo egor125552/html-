@@ -1,0 +1,28 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color-scheme: light dark;
+  --space: 1rem;
+}
+* { box-sizing: border-box; }
+body { max-width: 72rem; margin: 0 auto; padding: 1.25rem; line-height: 1.55; }
+header, section { margin-block: 1.5rem; }
+.skip-link { position: absolute; left: -9999px; }
+.skip-link:focus { left: 1rem; top: 1rem; padding: .75rem; background: Canvas; z-index: 10; }
+.field { margin-block: var(--space); }
+label { display: block; font-weight: 700; margin-bottom: .35rem; }
+textarea, input[type="file"] { width: 100%; font: inherit; }
+textarea { padding: .75rem; }
+button, .downloads a { font: inherit; padding: .65rem .9rem; min-height: 2.75rem; }
+button { cursor: pointer; }
+button[disabled] { cursor: wait; opacity: .65; }
+.hint { margin-top: .35rem; }
+#status { font-weight: 600; }
+#warning { border-inline-start: .3rem solid currentColor; padding-inline-start: .75rem; }
+audio { width: 100%; margin-block: .75rem; }
+.downloads, .filters { display: flex; flex-wrap: wrap; gap: .6rem; margin-block: 1rem; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: .55rem; border: 1px solid ButtonBorder; text-align: left; white-space: nowrap; }
+tbody tr:nth-child(even) { background: color-mix(in srgb, CanvasText 6%, Canvas); }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: .2rem solid Highlight; outline-offset: .15rem; }
+@media (max-width: 42rem) { body { padding: .75rem; } th, td { padding: .45rem; } }
