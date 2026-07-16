@@ -4,29 +4,30 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#111827">
-  <title>Phoneme Forge — проверка на iPhone</title>
+  <title>Phoneme Forge — настоящая фонемная разметка</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <a class="skip-link" href="#main">Перейти к содержимому</a>
   <header>
     <h1>Phoneme Forge</h1>
-    <p>Проверка интерфейса прямо в Safari. Аудио обрабатывается локально на устройстве и никуда не отправляется.</p>
+    <p>Настоящая русская фонемная разметка через BAS WebMAUS. Работает в Safari на iPhone.</p>
   </header>
 
   <main id="main">
     <section class="notice" aria-labelledby="mode-heading">
-      <h2 id="mode-heading">Режим этой ссылки</h2>
-      <p><strong>Браузерный прототип.</strong> Он проверяет загрузку, таблицу, прослушивание и экспорт. Границы пока приблизительные. Точный режим Montreal Forced Aligner запускается серверной версией из репозитория.</p>
+      <h2 id="mode-heading">Как работает</h2>
+      <p>Safari локально переводит запись в mono WAV 16 кГц. Затем аудио и точная расшифровка отправляются в университетский сервис BAS WebMAUS с русской моделью <strong>rus-RU</strong>. В ответ приходит настоящий TextGrid со словами и фонемами SAMPA.</p>
+      <p role="note">Запись обрабатывается на сервере LMU München и удаляется сервисом автоматически. Не загружайте чужие материалы без разрешения.</p>
     </section>
 
     <section aria-labelledby="upload-heading">
-      <h2 id="upload-heading">Новая разметка</h2>
+      <h2 id="upload-heading">Разметить запись</h2>
       <form id="align-form">
         <div class="field">
           <label for="audio">Аудиофайл</label>
           <input id="audio" name="audio" type="file" accept="audio/*,.mp3,.wav,.m4a,.ogg,.flac,.aac" required>
-          <p class="hint">Выберите запись из приложения «Файлы» на iPhone.</p>
+          <p class="hint">Для первой версии: до 15 минут. Лучше всего работают чистая речь и точная расшифровка.</p>
         </div>
 
         <div class="field">
@@ -34,21 +35,21 @@
           <textarea id="transcript" name="transcript" rows="10" required placeholder="Вставьте текст точно так, как он произнесён в записи."></textarea>
         </div>
 
-        <button id="submit" type="submit">Разметить аудио</button>
+        <button id="submit" type="submit">Найти настоящие фонемы</button>
       </form>
       <p id="status" role="status" aria-live="polite">Сервис готов.</p>
     </section>
 
     <section id="results" aria-labelledby="results-heading" hidden>
       <h2 id="results-heading" tabindex="-1">Результат</h2>
-      <p id="engine">Движок: локальный браузерный прототип.</p>
-      <p role="note">Временные границы служат для тестирования интерфейса, а не для финального sentence mixing.</p>
+      <p id="engine">Движок: BAS WebMAUS.</p>
+      <p id="warning" role="alert" hidden></p>
       <audio id="player" controls preload="metadata"></audio>
 
       <div class="downloads" aria-label="Экспорт разметки">
         <button id="download-json" type="button">Скачать JSON</button>
         <button id="download-csv" type="button">Скачать CSV</button>
-        <button id="download-textgrid" type="button">Скачать TextGrid</button>
+        <button id="download-textgrid" type="button">Скачать оригинальный TextGrid</button>
       </div>
 
       <div class="filters" role="group" aria-label="Фильтр результатов">
