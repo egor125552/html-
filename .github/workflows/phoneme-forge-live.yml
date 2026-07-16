@@ -1,6 +1,12 @@
 name: Phoneme Forge live model test
 
 on:
+  push:
+    branches:
+      - gemini-tts-app
+    paths:
+      - 'phoneme-forge/**'
+      - '.github/workflows/phoneme-forge-live.yml'
   pull_request:
     paths:
       - 'phoneme-forge/**'
@@ -36,7 +42,6 @@ jobs:
           trap 'kill $SERVER_PID || true' EXIT
           node <<'NODE'
           const { chromium } = require('playwright');
-          const path = require('path');
 
           (async () => {
             const browser = await chromium.launch({ headless: true });
@@ -54,9 +59,9 @@ jobs:
             const status = await page.locator('#status').innerText();
             console.log('FINAL STATUS:', status);
             if (!status.startsWith('Готово.')) throw new Error(status);
-            const phoneRows = await page.locator('#rows tr').count();
-            console.log('SEGMENT ROWS:', phoneRows);
-            if (phoneRows < 3) throw new Error(`Too few aligned rows: ${phoneRows}`);
+            const rowCount = await page.locator('#rows tr').count();
+            console.log('SEGMENT ROWS:', rowCount);
+            if (rowCount < 3) throw new Error(`Too few aligned rows: ${rowCount}`);
             await browser.close();
           })().catch(error => {
             console.error(error);
