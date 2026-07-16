@@ -1,0 +1,1 @@
+Live browser test uses real BAS WebMAUS and fails if the page falls back to fake timing.
