@@ -5,6 +5,7 @@ from rescue_matching import rescue
 from anchor_matching import anchor_match
 from page_validation import page_discrepancy
 from manual_review import apply_manual
+from full_site_overrides import verified_page_match
 from sitemap_matching import canonical_title, latin, SitemapMatcher, image_url
 from spreadsheet_io import read_first_sheet, update_xlsx
 from tempfile import TemporaryDirectory
@@ -320,6 +321,42 @@ xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
         self.assertEqual(status,"Неясно")
         self.assertEqual(outcome.status,"Проверить")
         self.assertIsNotNone(outcome.product)
+
+    def test_full_site_can_replace_rejected_photo(self):
+        source=build_product(19,"Паштeт с кроликом 100 г")
+        candidate={
+            19:{"Товар из ведомости":source.name,
+                "URL фотографии":"https://garfield.by/upload/rabbit.webp",
+                "URL товара":"https://garfield.by/catalog/cats/konservy/rabbit.html",
+                "Товар из каталога":"Паштeт с кроликом",
+                "Оценка":"0.91",
+                "Основание ручной проверки":"На изображении показана правильная версия"}
+        }
+        earlier={"Решение":"Ошибка","URL фотографии":"https://io.activecloud.com/old.webp"}
+        recovered=verified_page_match(19,source.name,source,earlier,candidate)
+        self.assertIsNotNone(recovered)
+        self.assertEqual(recovered[0].status,"Проверить")
+        self.assertEqual(recovered[0].product.url,"https://garfield.by/upload/rabbit.webp")
+
+    def test_full_site_cannot_restore_same_rejected_photo(self):
+        source=build_product(19,"Паштет с кроликом 100 г")
+        photo="https://io.activecloud.com/old.webp"
+        candidate={19:{"Товар из ведомости":source.name,
+                       "URL фотографии":photo,
+                       "URL товара":"https://garfield.by/catalog/cats/konservy/rabbit.html",
+                       "Товар из каталога":"Кролик","Оценка":"0.94",
+                       "Основание ручной проверки":"Какая-то фотография"}}
+        earlier={"Решение":"Ошибка","URL фотографии":photo}
+        self.assertIsNone(verified_page_match(19,source.name,source,earlier,candidate))
+
+    def test_full_site_rejects_untrusted_page(self):
+        source=build_product(3,"Паштет")
+        candidate={3:{"Товар из ведомости":source.name,
+                      "URL фотографии":"https://other.example/photo.jpg",
+                      "URL товара":"https://other.example/catalog/foo.html",
+                      "Товар из каталога":"Паштет","Оценка":"0.9",
+                      "Основание ручной проверки":"Снимок"}}
+        self.assertIsNone(verified_page_match(3,source.name,source,None,candidate))
 
     def test_normalization_is_deterministic(self):
         self.assertEqual(normalize("ГРО 5938; Д/кош."),normalize("ГРО 5938; Д/кош."))

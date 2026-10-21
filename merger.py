@@ -15,6 +15,7 @@ from rescue_matching import rescue
 from anchor_matching import anchor_match
 from page_validation import page_discrepancy
 from manual_review import load_manual, apply_manual
+from full_site_overrides import load_site_matches, verified_page_match
 from sitemap_matching import SitemapMatcher
 from matching_engine import build_product as create_catalog_product
 from spreadsheet_io import read_first_sheet, update_xlsx
@@ -90,6 +91,8 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
     sitemap=SitemapMatcher(SITEMAP_FILE) if Path(SITEMAP_FILE).exists() else None
     cached_images=load_sitemap_cache()
     manual_reviews=load_manual()
+    full_site_matches=load_site_matches()
+    full_site_added=0
     checked_rows=Counter()
     new_cache=[]
     print(f"Готово к поиску: {len(matcher.catalog)} товаров каталога")
@@ -140,6 +143,14 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
             checked_rows[manual_status]+=1
             if manual_status=="Ошибка":
                 image_source=""
+        if not result.product:
+            recovered=verified_page_match(row.row,name,source_product,
+                                          manual_reviews.get(row.row),
+                                          full_site_matches)
+            if recovered:
+                result,manual_status,manual_comment=recovered
+                image_source="Garfield: полная карта сайта, визуальная проверка"
+                full_site_added+=1
         if image_source=="Официальный сайт Garfield" and result.product:
             new_cache.append({"Строка Excel":row.row,
                               "Товар из ведомости":name,
@@ -218,6 +229,7 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
         summary.write("Каталоги часто не указывают размер упаковки.\n")
         summary.write(f"Из официальной карты сайта Garfield: {len(new_cache)}\n")
         summary.write(f"Несовпадения по страницам магазина (фото исключены): {len(discrepancies)}\n")
+        summary.write(f"Дополнительно найдено и визуально сверено по полной карте сайта: {full_site_added}\n")
         summary.write(f"Ручных проверок фотографий в журнале: {len(manual_reviews)}\n")
         summary.write(f"Результатов ручной проверки, применённых к текущему файлу: {sum(checked_rows.values())}\n")
         for decision,count in sorted(checked_rows.items()):
