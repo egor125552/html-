@@ -1,6 +1,8 @@
 """Регрессионные проверки: не путать критически разные варианты товаров."""
 import unittest
-from matching_engine import Matcher, build_product, normalize
+from matching_engine import Matcher, Match, build_product, normalize
+from rescue_matching import rescue
+from sitemap_matching import canonical_title, latin, SitemapMatcher
 from spreadsheet_io import read_first_sheet, update_xlsx
 from tempfile import TemporaryDirectory
 from zipfile import ZipFile
@@ -66,6 +68,53 @@ class MatchingTests(unittest.TestCase):
         q=build_product(10,"Препарат Cat 60мг")
         r=Matcher(make_catalog(["Препарат Cat 30мг"])).match(q)
         self.assertIsNone(r.product)
+
+    def test_rescue_rejects_generic_similar_products(self):
+        q=build_product(15,"Игрушка для собак синий мяч")
+        r=Matcher(make_catalog(["Игрушка для собак синяя косточка"]))
+        preliminary=Match(None,.48,"Нет совпадения","неизвестно",((.48,r.catalog[0]),))
+        found=rescue(r,q,preliminary)
+        self.assertIsNone(found.product)
+
+    def test_rescue_never_overrides_conflicting_size(self):
+        q=build_product(15,"Лакомство Cibau с индейкой 800г")
+        r=Matcher(make_catalog(["Cibau лакомство с индейкой 80г"]))
+        found=rescue(r,q,r.match(q))
+        self.assertIsNone(found.product)
+
+    def test_abbreviations_represent_same_flavour(self):
+        a=build_product(15,"AlphaPet сЧП Утк.клюк.мяс.кус.соус")
+        b=build_product(3,"AlphaPet Superpremium Утка и клюква мясные кусочки в соусе")
+        self.assertIn("duck",a.flavors)
+        self.assertIn("duck",b.flavors)
+        self.assertTrue(a.tokens & b.tokens)
+
+    def test_sitemap_transliteration(self):
+        self.assertEqual(canonical_title("govyadina-s-kuritsey"),"beef chicken")
+        self.assertEqual(latin("Санабелль"),"sanabell")
+
+    def test_sitemap_rejects_wrong_species(self):
+        xml = '''<?xml version="1.0" encoding="utf-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+<url><loc>https://garfield.by/catalog/cats/farmina-gastro.html</loc>
+<image:image><image:loc>https://garfield.by/image.jpg</image:loc></image:image></url>
+</urlset>'''
+        with TemporaryDirectory() as folder:
+            file=Path(folder)/"site.xml"
+            file.write_text(xml,encoding="utf-8")
+            found=SitemapMatcher(file).match(build_product(10,"Farmina Gastro для собак"))
+            self.assertIsNone(found)
+
+    def test_medicine_name_cannot_be_substituted(self):
+        q=build_product(10,"Ципровет для кошек")
+        r=Matcher(make_catalog(["Бимаксгард для кошек"]))
+        self.assertIsNone(r.match(q).product)
+
+    def test_snack_shape_cannot_be_substituted(self):
+        q=build_product(10,"Мясная нарезка для собак")
+        r=Matcher(make_catalog(["Мясная косичка для собак"]))
+        self.assertIsNone(r.match(q).product)
 
     def test_normalization_is_deterministic(self):
         self.assertEqual(normalize("ГРО 5938; Д/кош."),normalize("ГРО 5938; Д/кош."))

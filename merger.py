@@ -11,6 +11,9 @@ import csv
 from pathlib import Path
 
 from matching_engine import Matcher, build_product
+from rescue_matching import rescue
+from sitemap_matching import SitemapMatcher
+from matching_engine import build_product as create_catalog_product
 from spreadsheet_io import read_first_sheet, update_xlsx
 
 DEFAULT_INPUT = "Движение товара.xlsx"
@@ -18,6 +21,31 @@ DEFAULT_CATALOGS = tuple(f"products_garfield_{i}.xlsx" for i in range(1,4))
 DEFAULT_OUTPUT = "Движение товара с фотографиями.xlsx"
 REVIEW_FILE = "Товары для проверки.csv"
 REPORT_FILE = "Отчёт о сопоставлении.csv"
+SITEMAP_CACHE = "Найденные фото Garfield.csv"
+SITEMAP_FILE = "sitemap_img.xml"
+
+def load_sitemap_cache(path: str = SITEMAP_CACHE) -> dict[int, dict[str,str]]:
+    if not Path(path).is_file():
+        return {}
+    with open(path,encoding="utf-8-sig",newline="") as f:
+        return {int(row["Строка Excel"]):row for row in csv.DictReader(f,delimiter=";")}
+
+def cache_match(row_number: int,name: str,
+                cache: dict[int,dict[str,str]]):
+    from matching_engine import Match
+    cached=cache.get(row_number)
+    if not cached or cached.get("Товар из ведомости")!=name:
+        return None
+    url=cached.get("URL фотографии","")
+    page=cached.get("URL товара","")
+    title=cached.get("Товар из каталога","")
+    if not (url.startswith("https://garfield.by/") and
+            page.startswith("https://garfield.by/catalog/")):
+        return None
+    product=create_catalog_product(row_number,title,url,"",page)
+    return Match(product,float(cached["Оценка"]),"Проверить",
+                 "Ранее найденная официальная фотография Garfield. Проверьте фасовку.",
+                 ())
 
 def clean(value: str) -> str:
     return " ".join(str(value or "").split())
@@ -55,6 +83,9 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
     if not items:
         raise ValueError("Каталоги пусты")
     matcher=Matcher(items)
+    sitemap=SitemapMatcher(SITEMAP_FILE) if Path(SITEMAP_FILE).exists() else None
+    cached_images=load_sitemap_cache()
+    new_cache=[]
     print(f"Готово к поиску: {len(matcher.catalog)} товаров каталога")
     statistics=Counter()
     results={}
@@ -68,6 +99,22 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
             continue
         source_product=build_product(row.row,name)
         result=matcher.match(source_product)
+        result=rescue(matcher,source_product,result)
+        image_source="Каталоги Garfield (S3)" if result.product else ""
+        if not result.product:
+            new_result=(sitemap.match(source_product) if sitemap else None)
+            if not new_result:
+                new_result=cache_match(row.row,name,cached_images)
+            if new_result and new_result.product:
+                result=new_result
+                image_source="Официальный сайт Garfield"
+        if image_source=="Официальный сайт Garfield":
+            new_cache.append({"Строка Excel":row.row,
+                              "Товар из ведомости":name,
+                              "Товар из каталога":result.product.name,
+                              "URL фотографии":result.product.url,
+                              "URL товара":result.product.product_url,
+                              "Оценка":round(result.score,4)})
         statistics[result.status]+=1
         candidate=result.product
         result_row={
@@ -77,7 +124,8 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
             "catalog_name":candidate.name if candidate else "",
             "sku":candidate.sku if candidate else "",
             "product_url":candidate.product_url if candidate else "",
-            "reason":result.reason
+            "reason":result.reason,
+            "image_source":image_source
         }
         results[row.row]=result_row
         record={
@@ -87,7 +135,8 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
             "Оценка":round(result.score,4),
             "Товар из каталога":result_row["catalog_name"],
             "Артикул":result_row["sku"],
-            "URL Картинки в S3":result_row["url"],
+            "URL фотографии":result_row["url"],
+            "Источник фотографии":image_source,
             "URL Товара":result_row["product_url"],
             "Причина":result_row["reason"],
             "Другие кандидаты":" | ".join(
@@ -100,6 +149,13 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
         if len(results)%250==0:
             print(f"Обработано {len(results)} товаров")
     update_xlsx(source,output,results)
+    if sitemap is not None:
+        with open(SITEMAP_CACHE,"w",encoding="utf-8-sig",newline="") as cache_file:
+            writer=csv.DictWriter(cache_file,fieldnames=[
+                "Строка Excel","Товар из ведомости","Товар из каталога",
+                "URL фотографии","URL товара","Оценка"],delimiter=";")
+            writer.writeheader()
+            writer.writerows(new_cache)
     columns=list(report[0]) if report else []
     for path, rows in ((REPORT_FILE,report),(REVIEW_FILE,review)):
         with open(path,"w",encoding="utf-8-sig",newline="") as f:
@@ -119,6 +175,7 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
             summary.write(f"{status}: {count}\n")
         summary.write("Статус Проверить означает, что ссылка предварительная и может быть ошибочной.\n")
         summary.write("Каталоги часто не указывают размер упаковки.\n")
+        summary.write(f"Из официальной карты сайта Garfield: {len(new_cache)}\n")
     print("Созданы:",output, REPORT_FILE, REVIEW_FILE, "Итоги подбора фотографий.txt")
     return dict(statistics)
 

@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+
+sitemap_img.xml
+.patch_more.py
+.patch_sitemap.py

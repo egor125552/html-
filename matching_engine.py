@@ -8,6 +8,7 @@ from math import log
 import re
 import unicodedata
 from urllib.parse import urlparse
+from identity_safety import conflicts as identity_conflicts
 
 ALIASES = {
     "нэйчес протекшн":"natures protection", "нейчерс протекшн":"natures protection",
@@ -74,6 +75,51 @@ ALIASES = {
     "мм":"mm", "см":"cm", "гр":"g", "г":"g", "кг":"kg",
     "мл":"ml", "л":"l", "шт":"pcs",
 }
+
+ALIASES.update({
+    "сибау":"cibau", "джози дог":"josidog", "санал":"sanal",
+    "ванпи":"wanpy", "нюво":"nuevo", "ньюво":"nuevo",
+    "доктор вик":"doctor vic", "доктор виктор":"doctor vic",
+    "вет лайф":"farmina vet life", "ветлайф":"farmina vet life",
+    "фотоэко":"fotoeco", "форсекто":"forsecto",
+    "селафорт":"selafort", "адвокат":"advocate",
+    "эквилибриум":"equilibrium", "прайм натур":"prime nature",
+    "мяумс":"mnyams", "карни":"carny", "кэти":"cat",
+    "котики собачки":"kotiki sobachki",
+    "в асс":"assorted", "пометка":"", "прочее":"",
+    "микросилбержангель":"mikrosilber zahngel",
+    "зубной гель":"zahngel", "зубной":"dental", "зубные":"dental",
+    "спот он":"spot on", "д/животн":"animals", "животн":"animals",
+    "гипоалл":"hypoallergenic", "гипоаллерген":"hypoallergenic",
+    "счп":"sensitive", "чувств":"sensitive", "чувствит":"sensitive",
+    "пищевар":"digestion", "желудочно":"gastro",
+    "утк":"duck", "клюк":"cranberry", "морк":"carrot",
+    "говяд":"beef", "ягн":"lamb", "лос":"salmon", "кур":"chicken",
+    "тел":"veal", "крол":"rabbit", "черн":"blueberry",
+    "цыпленок":"chicken", "цыпленком":"chicken",
+    "брит премиум":"brit premium",
+    "картош":"potato", "рисов":"rice",
+    "в соусе":"gravy", "соус":"gravy", "с соусом":"gravy",
+    "мясные кусочки":"meat pieces", "мяс кус":"meat pieces",
+    "мяс":"meat", "кус":"pieces",
+    "д кош":"cat", "д соб":"dog", "д кот":"cat",
+    "взр":"adult", "взрос":"adult", "щенк":"puppy",
+    "стерил":"sterilised", "стер":"sterilised",
+    "мочевыводящих":"urinary", "мочевыводящей":"urinary",
+    "мочекаменной":"urinary",
+    "натурал":"natural", "суперпремиум":"superpremium",
+    "комкующийся":"clumping", "силикагелевый":"silica",
+    "пуппи":"puppy", "паппи":"puppy", "киттен":"kitten",
+    "эдалт":"adult", "адульт":"adult",
+    "зелен":"green", "сер":"gray", "роз":"pink", "голуб":"lightblue",
+    "бел":"white", "красн":"red", "желт":"yellow",
+    "птиц":"poultry", "птица":"poultry",
+    "юн":"junior", "бэби":"baby",
+    "полнорац":"food", "консервированный":"wet",
+    "консерв":"wet", "kонсервы":"wet",
+    "фл":"", "упак":"", "шт":"pcs",
+})
+
 PHRASE_PATTERN = re.compile("|".join(r"(?<!\w)" + re.escape(k) + r"(?!\w)"
                                      for k in sorted(ALIASES, key=len, reverse=True)))
 STOP = frozenset("""для из по на с со во в к ко от а и или при под без не до перед после
@@ -85,7 +131,7 @@ AGE = {"puppy", "kitten", "adult", "senior", "junior"}
 FLAVORS = {"chicken","turkey","duck","rabbit","salmon","herring","sardine","beef",
            "lamb","pork","fish","tuna","shrimp","squid","mackerel","hare",
            "venison","ostrich","potato","rice"}
-LINES = {"light","dental","urinary","renal","gastro","gastrointestinal",
+LINES = {"light","dental","urinary","renal","gastro","gastrointestinal","struvite",
          "hepatic","sensitive","sensible","hairball","metabolic","hypoallergenic",
          "indoor","bountiful","pacifica","prairie","sterilised","fit","veterinary",
          "hepat","hypoallergen","diabetic","weightcontrol","antihairball"}
@@ -113,7 +159,7 @@ def normalize(text: str) -> str:
     text = unicodedata.normalize("NFKC", str(text or "")).lower().replace("ё","е")
     text = text.replace("'", "").replace("’", "").replace("«", " ").replace("»", " ")
     text = re.sub(r"^\s*(?:\d{4,12}[a-zа-я]{0,2})\s+", "", text)
-    text = re.sub(r"1\s*\+\s*1(?:\s*=\s*3)?", "", text)
+    text = re.sub(r"1\s*\+\s*1(?:\s*=\s*3)?", " ", text)
     text = SIZE_RE.sub(" ", text)
     text = re.sub(r"(?<=\d),(?=\d)", ".", text)
     text = re.sub(r"(?<=\w)[./](?=\w)", " ", text)
@@ -212,7 +258,7 @@ class Matcher:
                     for word,ids in self.postings.items()}
 
     def _conflicts(self, source: Product, target: Product) -> tuple[list[str],list[str]]:
-        hard: list[str] = []
+        hard: list[str] = identity_conflicts(source.normalized,target.normalized,source.name)
         soft: list[str] = []
         if source.brand and target.brand and source.brand != target.brand:
             hard.append("другая марка")

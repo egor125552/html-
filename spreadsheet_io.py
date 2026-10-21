@@ -53,23 +53,23 @@ def read_first_sheet(path: str | Path) -> Iterator[Record]:
 
 def update_xlsx(source: str | Path, output: str | Path, matches: dict[int, dict[str, str | float]]) -> None:
     """Создать новую копию книги, не трогая исходные 12 столбцов."""
-    names = ["URL Картинки в S3", "Статус проверки", "Уверенность",
-             "Название в каталоге", "Артикул", "URL товара", "Обоснование"]
-    columns = ["M", "N", "O", "P", "Q", "R", "S"]
+    names = ["URL фотографии", "Статус проверки", "Уверенность",
+             "Название в каталоге", "Артикул", "URL товара", "Обоснование", "Источник фотографии"]
+    columns = ["M", "N", "O", "P", "Q", "R", "S", "T"]
     with ZipFile(source) as zin:
         root = ET.fromstring(zin.read("xl/worksheets/sheet1.xml"))
         dimension = root.find(M + "dimension")
         if dimension is not None:
             current = dimension.get("ref", "A1:L2152")
             m = re.search(r"(\d+)$", current)
-            dimension.set("ref", f"A1:S{m.group(1) if m else '2152'}")
+            dimension.set("ref", f"A1:T{m.group(1) if m else '2152'}")
         column_definitions = root.find(M + "cols")
         if column_definitions is None:
             column_definitions = ET.Element(M + "cols")
             data_node = root.find(M + "sheetData")
             root.insert(list(root).index(data_node), column_definitions)
         for col_index, width in ((13, 49), (14, 18), (15, 15), (16, 46),
-                                 (17, 20), (18, 48), (19, 45)):
+                                 (17, 20), (18, 48), (19, 45), (20, 23)):
             ET.SubElement(column_definitions, M + "col", {
                 "min": str(col_index), "max": str(col_index),
                 "width": str(width), "customWidth": "1"
@@ -81,13 +81,13 @@ def update_xlsx(source: str | Path, output: str | Path, matches: dict[int, dict[
             row_number = int(row.get("r", "0"))
             if row_number == 1:
                 values: list[str | float] = ["Фотография", "Проверка", "Проверка",
-                                             "Проверка", "Проверка", "Проверка", "Проверка"]
+                                             "Проверка", "Проверка", "Проверка", "Проверка", "Проверка"]
             elif row_number == 2:
                 values = names
             else:
                 match = matches.get(row_number, {})
                 values = [match.get(k, "") for k in
-                          ("url", "status", "confidence", "catalog_name", "sku", "product_url", "reason")]
+                          ("url", "status", "confidence", "catalog_name", "sku", "product_url", "reason", "image_source")]
             for column, value in zip(columns, values):
                 if value == "" or value is None:
                     continue
@@ -106,7 +106,7 @@ def update_xlsx(source: str | Path, output: str | Path, matches: dict[int, dict[
             if row_number > 2 and matches.get(row_number):
                 status = matches[row_number].get("status")
                 if status:
-                    row.set("spans", "1:19")
+                    row.set("spans", "1:20")
         xml = ET.tostring(root, encoding="utf-8", xml_declaration=True)
         with ZipFile(output, "w") as zout:
             for file_info in zin.infolist():
