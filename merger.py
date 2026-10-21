@@ -10,9 +10,10 @@ from collections import Counter
 import csv
 from pathlib import Path
 
-from matching_engine import Matcher, build_product
+from matching_engine import Matcher, Match, build_product
 from rescue_matching import rescue
 from anchor_matching import anchor_match
+from page_validation import page_discrepancy
 from sitemap_matching import SitemapMatcher
 from matching_engine import build_product as create_catalog_product
 from spreadsheet_io import read_first_sheet, update_xlsx
@@ -22,6 +23,7 @@ DEFAULT_CATALOGS = tuple(f"products_garfield_{i}.xlsx" for i in range(1,4))
 DEFAULT_OUTPUT = "Движение товара с фотографиями.xlsx"
 REVIEW_FILE = "Товары для проверки.csv"
 REPORT_FILE = "Отчёт о сопоставлении.csv"
+AUDIT_FILE = "Проверка страниц товаров.csv"
 SITEMAP_CACHE = "Найденные фото Garfield.csv"
 SITEMAP_FILE = "sitemap_img.xml"
 
@@ -92,6 +94,7 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
     results={}
     report=[]
     review=[]
+    discrepancies=[]
     for row in read_first_sheet(source):
         if row.row<=3:
             continue
@@ -114,6 +117,21 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
             if new_result and new_result.product:
                 result=new_result
                 image_source="Официальный сайт Garfield"
+        if result.product and result.product.product_url:
+            issue=page_discrepancy(source_product,result.product.product_url)
+            if issue:
+                discrepancies.append({
+                    "Строка Excel":row.row,
+                    "Товар из ведомости":name,
+                    "Предложенный товар":result.product.name,
+                    "Ссылка на страницу":result.product.product_url,
+                    "Предложенная фотография":result.product.url,
+                    "Выявленное несоответствие":issue
+                })
+                result=Match(None,result.score,"Нет совпадения",
+                             "ПРОВЕРКА ФАКТИЧЕСКОЙ КАРТОЧКИ: " + issue,
+                             result.alternatives)
+                image_source=""
         if image_source=="Официальный сайт Garfield":
             new_cache.append({"Строка Excel":row.row,
                               "Товар из ведомости":name,
@@ -155,6 +173,11 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
         if len(results)%250==0:
             print(f"Обработано {len(results)} товаров")
     update_xlsx(source,output,results)
+    if discrepancies:
+        with open(AUDIT_FILE,"w",encoding="utf-8-sig",newline="") as f:
+            writer=csv.DictWriter(f,fieldnames=list(discrepancies[0]),delimiter=";")
+            writer.writeheader()
+            writer.writerows(discrepancies)
     if sitemap is not None:
         with open(SITEMAP_CACHE,"w",encoding="utf-8-sig",newline="") as cache_file:
             writer=csv.DictWriter(cache_file,fieldnames=[
@@ -182,6 +205,7 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
         summary.write("Статус Проверить означает, что ссылка предварительная и может быть ошибочной.\n")
         summary.write("Каталоги часто не указывают размер упаковки.\n")
         summary.write(f"Из официальной карты сайта Garfield: {len(new_cache)}\n")
+        summary.write(f"Несовпадения по страницам магазина (фото исключены): {len(discrepancies)}\n")
     print("Созданы:",output, REPORT_FILE, REVIEW_FILE, "Итоги подбора фотографий.txt")
     return dict(statistics)
 

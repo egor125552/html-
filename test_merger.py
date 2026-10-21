@@ -3,6 +3,7 @@ import unittest
 from matching_engine import Matcher, Match, build_product, normalize
 from rescue_matching import rescue
 from anchor_matching import anchor_match
+from page_validation import page_discrepancy
 from sitemap_matching import canonical_title, latin, SitemapMatcher, image_url
 from spreadsheet_io import read_first_sheet, update_xlsx
 from tempfile import TemporaryDirectory
@@ -253,6 +254,36 @@ xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
         q=build_product(10,"Празицид-комплекс НЕО для кошек")
         m=Matcher(make_catalog(["Apicenna Празицид-комплекс НЕО для кошек"]))
         self.assertNotIn("другая марка",m._conflicts(q,m.catalog[0])[0])
+
+    def test_product_page_weight_mismatch(self):
+        q=build_product(10,"CAVIA COMPLETE корм 1,75 кг")
+        url="https://garfield.by/catalog/korm-cavia-complete-500-gr.html"
+        self.assertIn("500",page_discrepancy(q,url))
+
+    def test_product_page_volume_mismatch(self):
+        q=build_product(10,"Cliny Жидкость для полости рта 300мл")
+        url="https://garfield.by/catalog/zhidkost-dlya-polosti-rta-cliny-100-ml.html"
+        self.assertIn("100",page_discrepancy(q,url))
+
+    def test_multipack_total_is_valid(self):
+        q=build_product(10,"Деревенские лакомства пюре 40 гр")
+        url="https://garfield.by/catalog/pyure-krevetki-4-sht-kh-10-g.html"
+        self.assertIsNone(page_discrepancy(q,url))
+
+    def test_slug_leading_zero_decimal_kg(self):
+        q=build_product(10,"Fruttis корм 0,2 кг")
+        url="https://garfield.by/catalog/lakomstvo-fruttis-02-kg.html"
+        self.assertIsNone(page_discrepancy(q,url))
+
+    def test_page_dry_food_cannot_be_canned(self):
+        q=build_product(10,"Farmina корм сухой с уткой 1,5 кг")
+        url="https://garfield.by/catalog/cats/konservyi-dlya-koshek/farmina-utka-80-g.html"
+        self.assertIn("сухой",page_discrepancy(q,url))
+
+    def test_range_refers_to_animal_not_package(self):
+        q=build_product(10,"Селафорт для собак 5,1-10кг")
+        url="https://garfield.by/catalog/krka-selafort-dlya-sobak-5-1-10-kg-1-pipetka.html"
+        self.assertIsNone(page_discrepancy(q,url))
 
     def test_normalization_is_deterministic(self):
         self.assertEqual(normalize("ГРО 5938; Д/кош."),normalize("ГРО 5938; Д/кош."))
