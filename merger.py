@@ -14,6 +14,7 @@ from matching_engine import Matcher, Match, build_product
 from rescue_matching import rescue
 from anchor_matching import anchor_match
 from page_validation import page_discrepancy
+from manual_review import load_manual, apply_manual
 from sitemap_matching import SitemapMatcher
 from matching_engine import build_product as create_catalog_product
 from spreadsheet_io import read_first_sheet, update_xlsx
@@ -88,6 +89,8 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
     matcher=Matcher(items)
     sitemap=SitemapMatcher(SITEMAP_FILE) if Path(SITEMAP_FILE).exists() else None
     cached_images=load_sitemap_cache()
+    manual_reviews=load_manual()
+    checked_rows=Counter()
     new_cache=[]
     print(f"Готово к поиску: {len(matcher.catalog)} товаров каталога")
     statistics=Counter()
@@ -132,7 +135,12 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
                              "ПРОВЕРКА ФАКТИЧЕСКОЙ КАРТОЧКИ: " + issue,
                              result.alternatives)
                 image_source=""
-        if image_source=="Официальный сайт Garfield":
+        result, manual_status, manual_comment=apply_manual(row.row,name,result,manual_reviews)
+        if manual_status:
+            checked_rows[manual_status]+=1
+            if manual_status=="Ошибка":
+                image_source=""
+        if image_source=="Официальный сайт Garfield" and result.product:
             new_cache.append({"Строка Excel":row.row,
                               "Товар из ведомости":name,
                               "Товар из каталога":result.product.name,
@@ -149,7 +157,9 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
             "sku":candidate.sku if candidate else "",
             "product_url":candidate.product_url if candidate else "",
             "reason":result.reason,
-            "image_source":image_source
+            "image_source":image_source,
+            "manual_status":manual_status,
+            "manual_comment":manual_comment
         }
         results[row.row]=result_row
         record={
@@ -163,6 +173,8 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
             "Источник фотографии":image_source,
             "URL Товара":result_row["product_url"],
             "Причина":result_row["reason"],
+            "Ручная проверка":manual_status,
+            "Примечание ручной проверки":manual_comment,
             "Другие кандидаты":" | ".join(
                 f"{score:.3f}: {alternative.name} [{alternative.sku}]"
                 for score,alternative in result.alternatives[1:4])
@@ -206,6 +218,10 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
         summary.write("Каталоги часто не указывают размер упаковки.\n")
         summary.write(f"Из официальной карты сайта Garfield: {len(new_cache)}\n")
         summary.write(f"Несовпадения по страницам магазина (фото исключены): {len(discrepancies)}\n")
+        summary.write(f"Ручных проверок фотографий в журнале: {len(manual_reviews)}\n")
+        summary.write(f"Результатов ручной проверки, применённых к текущему файлу: {sum(checked_rows.values())}\n")
+        for decision,count in sorted(checked_rows.items()):
+            summary.write(f"  Ручная проверка, {decision}: {count}\n")
     print("Созданы:",output, REPORT_FILE, REVIEW_FILE, "Итоги подбора фотографий.txt")
     return dict(statistics)
 

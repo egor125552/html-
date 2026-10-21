@@ -4,6 +4,7 @@ from matching_engine import Matcher, Match, build_product, normalize
 from rescue_matching import rescue
 from anchor_matching import anchor_match
 from page_validation import page_discrepancy
+from manual_review import apply_manual
 from sitemap_matching import canonical_title, latin, SitemapMatcher, image_url
 from spreadsheet_io import read_first_sheet, update_xlsx
 from tempfile import TemporaryDirectory
@@ -285,6 +286,41 @@ xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
         url="https://garfield.by/catalog/krka-selafort-dlya-sobak-5-1-10-kg-1-pipetka.html"
         self.assertIsNone(page_discrepancy(q,url))
 
+    def test_manual_mismatch_is_removed_from_results(self):
+        p=build_product(9,"Точный препарат 100 мг","https://example.org/p.webp")
+        preliminary=Match(p,.9,"Надёжно","машинная оценка",())
+        manual={9:{"Товар из ведомости":"Точный препарат 100 мг",
+                  "URL фотографии":"https://example.org/p.webp",
+                  "Решение":"Ошибка",
+                  "Комментарий":"На фотографии другое лекарство"}}
+        outcome,status,reason=apply_manual(9,p.name,preliminary,manual)
+        self.assertIsNone(outcome.product)
+        self.assertEqual(status,"Ошибка")
+        self.assertIn("другое лекарство",outcome.reason)
+
+    def test_manual_record_does_not_follow_replacement_photo(self):
+        p=build_product(9,"Точный препарат 100 мг","https://example.org/new.webp")
+        preliminary=Match(p,.9,"Надёжно","машинная оценка",())
+        manual={9:{"Товар из ведомости":p.name,
+                  "URL фотографии":"https://example.org/old.webp",
+                  "Решение":"Ошибка",
+                  "Комментарий":"Старое фото неверно"}}
+        outcome,status,reason=apply_manual(9,p.name,preliminary,manual)
+        self.assertIsNotNone(outcome.product)
+        self.assertEqual(status,"")
+
+    def test_manual_uncertainty_downgrades_automatic_reliability(self):
+        p=build_product(9,"Корм для кошек 400 г","https://example.org/feed.webp")
+        original=Match(p,.94,"Надёжно","Высокий результат программы",())
+        log={9:{"Товар из ведомости":p.name,
+                "URL фотографии":p.url,
+                "Решение":"Неясно",
+                "Комментарий":"Масса упаковки не видна"}}
+        outcome,status,reason=apply_manual(9,p.name,original,log)
+        self.assertEqual(status,"Неясно")
+        self.assertEqual(outcome.status,"Проверить")
+        self.assertIsNotNone(outcome.product)
+
     def test_normalization_is_deterministic(self):
         self.assertEqual(normalize("ГРО 5938; Д/кош."),normalize("ГРО 5938; Д/кош."))
 
@@ -303,10 +339,12 @@ xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
             with ZipFile(original,"w") as z:
                 z.writestr("xl/worksheets/sheet1.xml",xml)
                 z.writestr("extra.txt","прежний")
-            update_xlsx(original,out,{4:{"url":"https://example.org/p.webp","status":"Надёжно","confidence":.98}})
+            update_xlsx(original,out,{4:{"url":"https://example.org/p.webp","status":"Надёжно","confidence":.98,"manual_status":"Совпадает","manual_comment":"Проверил фото"}})
             contents={r.row:r.data for r in read_first_sheet(out)}
             self.assertEqual(contents[4]["A"],"Товар")
             self.assertEqual(contents[4]["B"],"9")
+            self.assertEqual(contents[4]["U"],"Совпадает")
+            self.assertEqual(contents[4]["V"],"Проверил фото")
             self.assertEqual(contents[4]["M"],"https://example.org/p.webp")
             self.assertEqual(contents[4]["O"],"0.98")
             with ZipFile(out) as z: self.assertEqual(z.read("extra.txt"),b"\xd0\xbf\xd1\x80\xd0\xb5\xd0\xb6\xd0\xbd\xd0\xb8\xd0\xb9")
