@@ -21,6 +21,23 @@ def conflicts(source: str, target: str, raw_source: str = "") -> list[str]:
     missing=sorted(name for name in DRUG_NAMES if name in src and name not in dst)
     if missing:
         found.append("другое торговое название препарата: " + ", ".join(missing))
+    toy_shapes={"огурчик","осьминожка","осьминог","скат","улитка",
+                "кактус","лобстер","питахайя","walrus","octopus"}
+    a=src & toy_shapes
+    b=dst & toy_shapes
+    if a and b and not a.intersection(b):
+        found.append("другая форма или персонаж игрушки")
+    bowl_series={"candy","diamond","daimond"}
+    a=src & bowl_series
+    b=dst & bowl_series
+    if a and b and not a.intersection(b):
+        found.append("другая серия посуды")
+    if "frosty" in src and "frosty" not in dst:
+        found.append("другая линейка: фросты")
+    if "палочки" in src and ("крем" in dst or "консервы" in dst):
+        found.append("другая форма лакомства")
+    if "соломка" in src and "сублимированное" in dst and "соломка" not in dst:
+        found.append("другая форма лакомства")
     if "нарезка" in src and "косичка" in dst or "косичка" in src and "нарезка" in dst:
         found.append("другая форма лакомства")
     if ("sport" in src or "спорт" in src) and ("standard" in dst or "стандарт" in dst):

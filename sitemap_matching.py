@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 import re
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlparse, urlsplit, urlunsplit, quote
 from xml.etree import ElementTree as ET
 
 from matching_engine import Match, Matcher, Product, build_product
@@ -47,6 +47,14 @@ SPECIES={"cat","dog","fish","bird","rodent","horse"}
 SITEMAP_NS={'s':'http://www.sitemaps.org/schemas/sitemap/0.9',
             'i':'http://www.google.com/schemas/sitemap-image/1.1'}
 
+def image_url(original: str) -> str:
+    """Normalize real picture filenames with spaces/Cyrillic into usable HTTPS URLs."""
+    pieces=urlsplit(original)
+    if pieces.scheme!="https" or not pieces.netloc:
+        return original
+    return urlunsplit((pieces.scheme,pieces.netloc,
+                       quote(pieces.path,safe="/~-._%"),pieces.query,pieces.fragment))
+
 def latin(text: str) -> str:
     return "".join(CYRILLIC.get(ch,ch) for ch in text.lower().replace("ё","е"))
 
@@ -80,7 +88,7 @@ def image_records(xmlfile: str | Path) -> list[Product]:
         category="cat" if "/cats/" in page else "dog" if "/dogs/" in page else ""
         if not title:
             continue
-        item=build_product(len(results)+1,title,images[0],"",page,category)
+        item=build_product(len(results)+1,title,image_url(images[0]),"",page,category)
         seen.add(page)
         results.append(item)
     return results

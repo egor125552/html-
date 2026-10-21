@@ -117,6 +117,23 @@ ALIASES.update({
     "юн":"junior", "бэби":"baby",
     "полнорац":"food", "консервированный":"wet",
     "консерв":"wet", "kонсервы":"wet",
+    "говяжья":"beef", "говяжье":"beef", "говяжьей":"beef",
+    "куриная":"chicken", "куриный":"chicken", "куриного":"chicken",
+    "утиная":"duck", "утиное":"duck",
+    "свиная":"pork", "свиное":"pork",
+    "нюша":"nyusha", "титбит":"titbit",
+    "буйвол":"buffalo", "буйвола":"buffalo", "буйволом":"buffalo",
+    "треска":"cod", "трески":"cod", "треской":"cod",
+    "форель":"trout", "форели":"trout", "форелью":"trout",
+    "гусь":"goose", "гусем":"goose", "гусин":"goose",
+    "конина":"horsemeat", "кониной":"horsemeat",
+    "перепелка":"quail", "перепёлка":"quail",
+    "печень":"liver", "печенью":"liver",
+    "молоко":"milk", "молоком":"milk",
+    "зелён":"green", "зелен":"green", "зел.":"green",
+    "розов":"pink", "роз.":"pink",
+    "пурпурная":"purple", "пурпурный":"purple",
+    "фросты":"frosty",
     "фл":"", "упак":"", "шт":"pcs",
 })
 
@@ -130,7 +147,7 @@ SPECIES = {"cat", "dog", "bird", "fish", "rodent", "horse"}
 AGE = {"puppy", "kitten", "adult", "senior", "junior"}
 FLAVORS = {"chicken","turkey","duck","rabbit","salmon","herring","sardine","beef",
            "lamb","pork","fish","tuna","shrimp","squid","mackerel","hare",
-           "venison","ostrich","potato","rice"}
+           "venison","ostrich","potato","rice", "buffalo","cod","trout", "goose","horsemeat","quail","liver","milk"}
 LINES = {"light","dental","urinary","renal","gastro","gastrointestinal","struvite",
          "hepatic","sensitive","sensible","hairball","metabolic","hypoallergenic",
          "indoor","bountiful","pacifica","prairie","sterilised","fit","veterinary",
@@ -150,6 +167,7 @@ BRANDS = {
  "chammy", "vitakraft", "titan", "sera", "beaphar", "hill", "kippy",
  "grandorf", "go", "now", "zoo", "8in1", "8 in 1", "happy dog", "happy cat",
  "hunter", "petstages", "trixie", "carnilove", "summit", "savic", "croci", "moderna",
+ "cennamo", "camon", "alpenhof", "mr kranch", "isegrim", "versele laga", "beeztees", "pchelodar", "wanpy", "nyusha", "titbit", "amiplay",
  "dezzie", "best dinner", "ownat", "1st choice", "one"
 }
 SIZE_RE = re.compile(r"(?<!\w)(\d+(?:[.,]\d+)?)\s*(кг|kg|гр|г|gr|g|мг|mg|мкг|mcg|мл|ml|л|l|см|cm|мм|mm)\b",re.I)
@@ -164,11 +182,14 @@ def normalize(text: str) -> str:
     text = re.sub(r"(?<=\d),(?=\d)", ".", text)
     text = re.sub(r"(?<=\w)[./](?=\w)", " ", text)
     text = PHRASE_PATTERN.sub(lambda match: ALIASES[match.group()], text)
+    text = re.sub(r"\bbrit\s+короткошерст\w*", "british shorthair", text)
+    if re.search(r"(?<!\\w)canin(?!\\w)", text) and not re.search(r"\\broyal\\s+canin\\b",text):
+        text = re.sub(r"(?<!\\w)canin(?!\\w)","royal canin",text)
     text = re.sub(r"[^\w.]+", " ", text, flags=re.UNICODE)
-    return " ".join(text.split())
+    return " ".join(word.strip(".") for word in text.split() if word.strip("."))
 
-def units(text: str) -> frozenset[tuple[str, int]]:
-    found: set[tuple[str, int]] = set()
+def units(text: str) -> frozenset[tuple[str, float]]:
+    found: set[tuple[str, float]] = set()
     for value, suffix in SIZE_RE.findall(unicodedata.normalize("NFKC",text.lower()).replace("ё","е")):
         numeric = float(value.replace(",", "."))
         suffix = suffix.lower()
@@ -180,7 +201,7 @@ def units(text: str) -> frozenset[tuple[str, int]]:
         elif suffix in ("мл","ml"): kind, number = "volume", numeric
         elif suffix in ("см","cm"): kind, number = "length", numeric * 10
         else: kind, number = "length", numeric
-        found.add((kind, round(number)))
+        found.add((kind, round(number,4)))
     return frozenset(found)
 
 def codes(text: str) -> frozenset[str]:
@@ -189,11 +210,13 @@ def codes(text: str) -> frozenset[str]:
     return frozenset(prefix + number for prefix, number in CODE_RE.findall(raw))
 
 def detect_brand(normalized: str) -> str:
+    # The first brand named in the title wins: "Trixie Premium Collar" is
+    # made by Trixie, while "Collar Neoprene" is made by Collar.
     value = " " + normalized + " "
-    for brand in sorted(BRANDS, key=lambda v: -len(v)):
-        if " " + brand + " " in value:
-            return brand
-    return ""
+    positions = [(value.find(" " + brand + " "), -len(brand),brand)
+                 for brand in sorted(BRANDS)
+                 if " " + brand + " " in value]
+    return min(positions)[2] if positions else ""
 
 @dataclass(frozen=True)
 class Product:
@@ -201,7 +224,7 @@ class Product:
     name: str
     normalized: str
     tokens: frozenset[str]
-    sizes: frozenset[tuple[str, int]]
+    sizes: frozenset[tuple[str, float]]
     codes: frozenset[str]
     brand: str
     species: frozenset[str]
@@ -261,7 +284,12 @@ class Matcher:
         hard: list[str] = identity_conflicts(source.normalized,target.normalized,source.name)
         soft: list[str] = []
         if source.brand and target.brand and source.brand != target.brand:
-            hard.append("другая марка")
+            product_line_exception=(
+                {source.brand,target.brand}=={"prazicid","apicenna"}
+                and "prazicid" in source.tokens and "prazicid" in target.tokens
+            )
+            if not product_line_exception:
+                hard.append("другая марка")
         if source.species and target.species and not source.species.intersection(target.species):
             hard.append("другое животное")
         if source.ages and target.ages and not source.ages.intersection(target.ages):
@@ -270,6 +298,15 @@ class Matcher:
                 hard.append("другой возраст")
         if source.flavors and target.flavors and not source.flavors.intersection(target.flavors):
             hard.append("другой вкус")
+        # Matching "liver" or "rice" does not make beef and chicken identical.
+        proteins = {"beef","chicken","duck","turkey","rabbit","salmon",
+                    "cod","trout","goose","horsemeat","quail","buffalo",
+                    "lamb","pork","tuna","venison","hare","herring","sardine",
+                    "mackerel","ostrich","squid","shrimp"}
+        source_proteins=source.flavors & proteins
+        target_proteins=target.flavors & proteins
+        if source_proteins and target_proteins and source_proteins != target_proteins:
+            hard.append("другой набор мясных или рыбных ингредиентов")
         if source.colors and target.colors and not source.colors.intersection(target.colors):
             hard.append("другой цвет")
         if source.lines and target.lines and not source.lines.intersection(target.lines):

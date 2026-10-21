@@ -2,7 +2,8 @@
 import unittest
 from matching_engine import Matcher, Match, build_product, normalize
 from rescue_matching import rescue
-from sitemap_matching import canonical_title, latin, SitemapMatcher
+from anchor_matching import anchor_match
+from sitemap_matching import canonical_title, latin, SitemapMatcher, image_url
 from spreadsheet_io import read_first_sheet, update_xlsx
 from tempfile import TemporaryDirectory
 from zipfile import ZipFile
@@ -115,6 +116,143 @@ xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
         q=build_product(10,"Мясная нарезка для собак")
         r=Matcher(make_catalog(["Мясная косичка для собак"]))
         self.assertIsNone(r.match(q).product)
+
+    def test_fractional_medication_strength_is_preserved(self):
+        from matching_engine import units
+        self.assertIn(("dose", 5.4), units("Апоквел 5,4 мг"))
+        self.assertIn(("dose", 5.5), units("Апоквел 5,5 мг"))
+        self.assertNotEqual(units("Апоквел 5,4 мг"),units("Апоквел 5,5 мг"))
+
+    def test_fractional_pipette_volume_is_preserved(self):
+        from matching_engine import units
+        self.assertIn(("volume", 0.5), units("Капли 0,5 мл"))
+        self.assertIn(("volume", 0.8), units("Капли 0,8 мл"))
+        self.assertNotEqual(units("Капли 0,5 мл"),units("Капли 0,8 мл"))
+
+    def test_terminal_dot_does_not_create_new_token(self):
+        self.assertEqual(normalize("свинок."),normalize("свинок"))
+
+    def test_anchor_finds_distinctive_product_series(self):
+        q=build_product(10,"CAVIA COMPLETE полноценный корм для морских свинок 1,75 кг")
+        c=make_catalog(["Versele Laga Корм Cavia Complete",
+                        "Bambini Pets корм для морских свинок",
+                        "Bambini Pets корм для крыс"])
+        found=anchor_match(Matcher(c),q)
+        self.assertIsNotNone(found)
+        self.assertIn("Cavia Complete",found.product.name)
+
+    def test_anchor_does_not_swap_flavours(self):
+        q=build_product(10,"Cat Step Arctic Lavender наполнитель д/кошек 3,8 л")
+        c=make_catalog(["Cat Step Arctic Breeze","Cat Step Arctic Fresh Mint"])
+        self.assertIsNone(anchor_match(Matcher(c),q))
+
+    def test_anchor_does_not_swap_medication_doses(self):
+        q=build_product(10,"Апоквел 5,4 мг 100 табл")
+        c=make_catalog(["Апоквел 5,5 мг","Апоквел 3,6 мг"])
+        self.assertIsNone(anchor_match(Matcher(c),q))
+
+    def test_anchor_unique_drug_dose(self):
+        q=build_product(10,"Апоквел 5,4 мг 100 табл")
+        c=make_catalog(["Zoetis Апоквел 5,4 мг","Zoetis Апоквел 3,6 мг"])
+        found=anchor_match(Matcher(c),q)
+        self.assertIsNotNone(found)
+        self.assertIn("5,4",found.product.name)
+
+    def test_anchor_rejects_different_toy_animal(self):
+        q=build_product(10,"Toy Dog Aqua Alaska Walrus TPR")
+        c=make_catalog(["Hunter Игрушка для собак Aqua Alaska Octopus"])
+        self.assertIsNone(anchor_match(Matcher(c),q))
+
+    def test_anchor_rejects_food_replaced_with_snack(self):
+        q=build_product(10,"Mini France 24/12 Утка картофель 0,8 кг")
+        c=make_catalog(["Happy Dog Soft Snack France (Утка картофель)"])
+        self.assertIsNone(anchor_match(Matcher(c),q))
+
+    def test_anchor_rejects_brandless_generic_ingredient(self):
+        q=build_product(10,"Сердце говяжье 1 кг")
+        c=make_catalog(["Clan Pride Консервы Говяжье сердце и печень"])
+        self.assertIsNone(anchor_match(Matcher(c),q))
+
+    def test_anchor_rejects_source_brand_not_on_product(self):
+        q=build_product(10,"Уши кроличьи с мясом утки Деревенские лакомства 90г")
+        c=make_catalog(["AlpenHof Уши кроличьи с мясом утки"])
+        self.assertIsNone(anchor_match(Matcher(c),q))
+
+    def test_british_shorthair_breed_is_not_brit_brand(self):
+        q=build_product(10,"BRITISH SHORTHAIR ADULT (Брит короткошерстная)")
+        r=Matcher(make_catalog(["Royal Canin British Shorthair Adult для кошек"]))
+        self.assertNotIn("другая марка",r._conflicts(q,r.catalog[0])[0])
+        
+    def test_image_url_encodes_spaces_and_unicode(self):
+        url="https://garfield.by/upload/iblock/Сухой корм (1).webp"
+        fixed=image_url(url)
+        self.assertNotIn(" ",fixed)
+        self.assertIn("%20",fixed)
+        self.assertIn("%D0%A1",fixed)
+
+    def test_buffalo_cannot_be_replaced_with_cod(self):
+        q=build_product(10,"MONGE BWILD корм с мясом буйвола для кошек")
+        r=Matcher(make_catalog(["Monge Cat Bwild (Треска) для кошек"]))
+        self.assertIsNone(r.match(q).product)
+
+    def test_green_abbreviation_cannot_be_replaced_with_pink(self):
+        q=build_product(10,"Мяч зелён.5см")
+        r=Matcher(make_catalog(["Мяч розовый 5 см"]))
+        self.assertIsNone(r.match(q).product)
+
+    def test_frosty_treat_cannot_be_replaced_with_canned_food(self):
+        q=build_product(10,'Мнямс Лакомство Фросты из курицы для собак')
+        r=Matcher(make_catalog(['Мнямс Консервы для щенков с курицей']))
+        self.assertIsNone(r.match(q).product)
+
+    def test_sticks_cannot_be_replaced_with_cream(self):
+        q=build_product(10,'Мнямс Лакомство с цыпленком и печенью для кошек Палочки')
+        r=Matcher(make_catalog(['Мнямс Крем-лакомство для кошек с курицей']))
+        self.assertIsNone(r.match(q).product)
+
+    def test_canin_short_form_means_royal_canin_brand(self):
+        q=build_product(10,"GASTRO INTESTINAL LOW FAT CANIN 420г для собак")
+        target=build_product(12,"Cennamo HT Diet Gastro intestinal")
+        r=Matcher([target.__class__(**{**target.__dict__,"url":"https://example.org/x.jpg"})])
+        self.assertTrue(r._conflicts(q,r.catalog[0])[0])
+
+    def test_different_protein_not_masked_by_shared_liver(self):
+        q=build_product(10,"WANPY Говяжья печень для собак")
+        m=Matcher(make_catalog(["Wanpy Курица и печень для собак"]))
+        self.assertIsNone(m.match(q).product)
+
+    def test_named_toy_shapes_cannot_be_swapped(self):
+        q=build_product(10,"Игрушка Mr.Kranch Огурчик для кошек")
+        m=Matcher(make_catalog(["Mr.Kranch Лобстер для кошек"]))
+        self.assertIsNone(m.match(q).product)
+
+    def test_named_bowl_series_cannot_be_swapped(self):
+        q=build_product(10,"Миска Mr.Kranch Candy")
+        m=Matcher(make_catalog(["Mr.Kranch Миска Diamond"]))
+        self.assertIsNone(m.match(q).product)
+
+    def test_named_liver_brand_cannot_be_swapped(self):
+        q=build_product(10,'Печень говяжья "Нюша" 50 г')
+        m=Matcher(make_catalog(["ТИТБИТ Печень говяжья для кошек"]))
+        self.assertIsNone(m.match(q).product)
+
+    def test_brand_selection_prefers_first_label_over_generic_collar(self):
+        p=build_product(10,"Trixie Ошейник Premium Collar Blue")
+        self.assertEqual(p.brand,"trixie")
+        q=build_product(10,"Ошейник, Collar Neoprene VP синий")
+        self.assertEqual(q.brand,"collar")
+        m=Matcher(make_catalog(["Trixie Ошейник Premium Collar Blue"]))
+        self.assertIsNone(m.match(q).product)
+
+    def test_anchor_does_not_assign_brand_to_generic_duck_feet(self):
+        q=build_product(10,"Лапки утиные 50 шт")
+        c=make_catalog(["Бобик-Снобик лапки утиные"])
+        self.assertIsNone(anchor_match(Matcher(c),q))
+
+    def test_medicine_product_line_is_not_mistaken_for_manufacturer(self):
+        q=build_product(10,"Празицид-комплекс НЕО для кошек")
+        m=Matcher(make_catalog(["Apicenna Празицид-комплекс НЕО для кошек"]))
+        self.assertNotIn("другая марка",m._conflicts(q,m.catalog[0])[0])
 
     def test_normalization_is_deterministic(self):
         self.assertEqual(normalize("ГРО 5938; Д/кош."),normalize("ГРО 5938; Д/кош."))

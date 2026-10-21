@@ -12,6 +12,7 @@ from pathlib import Path
 
 from matching_engine import Matcher, build_product
 from rescue_matching import rescue
+from anchor_matching import anchor_match
 from sitemap_matching import SitemapMatcher
 from matching_engine import build_product as create_catalog_product
 from spreadsheet_io import read_first_sheet, update_xlsx
@@ -101,6 +102,11 @@ def run(source: str = DEFAULT_INPUT, catalogs: list[str] | None = None,
         result=matcher.match(source_product)
         result=rescue(matcher,source_product,result)
         image_source="Каталоги Garfield (S3)" if result.product else ""
+        if not result.product:
+            anchor=anchor_match(matcher,source_product)
+            if anchor:
+                result=anchor
+                image_source="Каталоги Garfield (по редкой серии)"
         if not result.product:
             new_result=(sitemap.match(source_product) if sitemap else None)
             if not new_result:
